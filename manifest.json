@@ -1,0 +1,24 @@
+{
+  "name": "Whiteclaw Care Tracker",
+  "short_name": "Whiteclaw",
+  "description": "Daily & weekly care tracker for Whiteclaw",
+  "start_url": "./index.html",
+  "display": "standalone",
+  "background_color": "#1a1a2e",
+  "theme_color": "#e67e22",
+  "orientation": "portrait-primary",
+  "icons": [
+    {
+      "src": "./icon192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "./icon512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    }
+  ]
+}
