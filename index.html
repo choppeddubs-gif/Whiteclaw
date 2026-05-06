@@ -1,0 +1,2159 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#e67e22">
+<link rel="manifest" href="./manifest.json">
+<link rel="apple-touch-icon" href="./icon192.png">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<title>Whiteclaw - Care Tracker</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+  * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+
+  :root {
+    --bg: #1a1a2e; --sidebar: #16213e; --card: #1e2a45; --card-hover: #253252;
+    --accent: #e67e22; --accent-light: #f39c12; --green: #27ae60; --green-light: #2ecc71;
+    --red: #e74c3c; --blue: #3498db; --purple: #9b59b6;
+    --text: #ecf0f1; --text-dim: #95a5a6; --text-muted: #7f8c8d; --border: #2c3e50;
+    --safe-top: env(safe-area-inset-top, 0px);
+    --safe-bottom: env(safe-area-inset-bottom, 0px);
+    --p1: #e74c3c; --p2: #e67e22; --p3: #3498db; --p4: #7f8c8d;
+  }
+
+  body {
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+    background: var(--bg); color: var(--text);
+    min-height: 100vh; min-height: 100dvh;
+    overflow-x: hidden;
+    padding-top: var(--safe-top);
+    padding-bottom: calc(64px + var(--safe-bottom));
+  }
+
+  /* ===== MOBILE BOTTOM NAV ===== */
+  .bottom-nav {
+    position: fixed; bottom: 0; left: 0; right: 0;
+    background: var(--sidebar); border-top: 1px solid var(--border);
+    display: flex; justify-content: space-around; align-items: center;
+    padding: 6px 0 calc(6px + var(--safe-bottom));
+    z-index: 100;
+  }
+  .bottom-nav .tab {
+    display: flex; flex-direction: column; align-items: center; gap: 2px;
+    padding: 6px 12px; border-radius: 10px; cursor: pointer;
+    color: var(--text-muted); font-size: 10px; font-weight: 600;
+    transition: all 0.15s; min-width: 48px;
+  }
+  .bottom-nav .tab .tab-icon { font-size: 20px; }
+  .bottom-nav .tab.active { color: var(--accent-light); background: rgba(230,126,34,0.1); }
+
+  /* ===== DESKTOP SIDEBAR ===== */
+  .sidebar {
+    width: 260px; background: var(--sidebar); border-right: 1px solid var(--border);
+    padding: 24px 16px; display: none; flex-direction: column;
+    position: fixed; top: 0; left: 0; bottom: 0; z-index: 10;
+  }
+  @media (min-width: 769px) {
+    .sidebar { display: flex; }
+    .bottom-nav { display: none; }
+    .main { margin-left: 260px; }
+  }
+
+  .sidebar-header { display: flex; align-items: center; gap: 12px; padding: 0 8px 24px; border-bottom: 1px solid var(--border); margin-bottom: 24px; }
+  .dog-avatar { width: 44px; height: 44px; border-radius: 50%; background: linear-gradient(135deg, var(--accent), var(--accent-light)); display: flex; align-items: center; justify-content: center; font-size: 22px; flex-shrink: 0; }
+  .sidebar-header h1 { font-size: 18px; font-weight: 800; }
+  .sidebar-header p { font-size: 11px; color: var(--text-dim); margin-top: 2px; }
+
+  .nav-item {
+    display: flex; align-items: center; gap: 10px; padding: 10px 12px;
+    border-radius: 8px; cursor: pointer; transition: all 0.15s;
+    font-size: 14px; font-weight: 500; color: var(--text-dim);
+  }
+  .nav-item:hover { background: var(--card); color: var(--text); }
+  .nav-item.active { background: var(--accent); color: white; }
+  .nav-item .icon { font-size: 18px; width: 24px; text-align: center; }
+  .nav-item .badge { margin-left: auto; background: rgba(255,255,255,0.15); padding: 2px 8px; border-radius: 10px; font-size: 12px; font-weight: 600; }
+
+  .sidebar-stats { margin-top: auto; padding: 14px; background: var(--card); border-radius: 12px; }
+  .stat-row { display: flex; justify-content: space-between; padding: 4px 0; font-size: 13px; }
+  .stat-row .label { color: var(--text-dim); }
+  .stat-row .value { font-weight: 700; color: var(--accent-light); }
+  .progress-bar { height: 6px; background: var(--border); border-radius: 3px; margin-top: 10px; overflow: hidden; }
+  .progress-fill { height: 100%; background: linear-gradient(90deg, var(--accent), var(--green)); border-radius: 3px; transition: width 0.5s; }
+
+  /* ===== MAIN ===== */
+  .main { padding: 20px 16px 24px; max-width: 700px; margin: 0 auto; }
+  @media (min-width: 769px) { .main { padding: 32px 40px; margin: 0; margin-left: 260px; } }
+
+  .main-header { margin-bottom: 24px; }
+  .main-header h2 { font-size: 24px; font-weight: 800; display: flex; align-items: center; gap: 10px; }
+  .main-header .subtitle { font-size: 13px; color: var(--text-dim); margin-top: 4px; }
+
+  .streak { display: inline-flex; align-items: center; gap: 6px; background: linear-gradient(135deg, rgba(230,126,34,0.2), rgba(231,76,60,0.2)); padding: 6px 14px; border-radius: 20px; font-size: 13px; font-weight: 600; color: var(--accent-light); margin-top: 8px; }
+
+  /* ===== NOTIFICATION BANNER ===== */
+  .notif-banner {
+    background: linear-gradient(135deg, var(--accent), #d35400);
+    padding: 12px 16px; border-radius: 10px; margin-bottom: 20px;
+    display: flex; align-items: center; gap: 12px; cursor: pointer;
+  }
+  .notif-banner .icon { font-size: 24px; }
+  .notif-banner .text { flex: 1; font-size: 13px; font-weight: 500; }
+  .notif-banner .text strong { display: block; font-size: 14px; margin-bottom: 2px; }
+  .notif-banner .btn {
+    background: rgba(255,255,255,0.2); border: none; color: white;
+    padding: 6px 14px; border-radius: 6px; font-size: 13px; font-weight: 600; cursor: pointer;
+  }
+
+  /* ===== SECTIONS ===== */
+  .section { margin-bottom: 28px; }
+  .section-header { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; padding-bottom: 8px; border-bottom: 1px solid var(--border); }
+  .section-header h3 { font-size: 15px; font-weight: 700; display: flex; align-items: center; gap: 6px; }
+  .section-header .count { font-size: 11px; color: var(--text-muted); background: var(--card); padding: 2px 8px; border-radius: 10px; font-weight: 600; }
+
+  /* ===== TASK ITEM ===== */
+  .task-item {
+    display: flex; align-items: flex-start; gap: 10px;
+    padding: 12px 14px; background: var(--card); border-radius: 10px;
+    margin-bottom: 6px; transition: all 0.15s; cursor: pointer;
+    border: 1px solid transparent; -webkit-user-select: none; user-select: none;
+  }
+  .task-item:active { transform: scale(0.98); background: var(--card-hover); }
+  .task-item.completed { opacity: 0.45; }
+  .task-item.completed .task-name { text-decoration: line-through; color: var(--text-muted); }
+  .task-item.overdue { border-left: 3px solid var(--red); }
+
+  .checkbox {
+    width: 22px; height: 22px; border-radius: 50%;
+    border: 2px solid var(--text-muted); display: flex; align-items: center;
+    justify-content: center; flex-shrink: 0; transition: all 0.2s; margin-top: 1px;
+  }
+  .checkbox.p1 { border-color: var(--p1); }
+  .checkbox.p2 { border-color: var(--p2); }
+  .checkbox.p3 { border-color: var(--p3); }
+  .checkbox.p4 { border-color: var(--p4); }
+  .checkbox.checked { background: var(--green); border-color: var(--green); }
+  .checkbox.checked::after { content: '\2713'; color: white; font-size: 13px; font-weight: 700; }
+
+  .task-content { flex: 1; min-width: 0; }
+  .task-name { font-size: 14px; font-weight: 600; margin-bottom: 3px; line-height: 1.3; }
+  .task-meta { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+  .task-tag { display: inline-flex; align-items: center; gap: 3px; font-size: 11px; padding: 2px 7px; border-radius: 4px; font-weight: 500; }
+  .tag-time { background: rgba(230,126,34,0.15); color: var(--accent-light); }
+  .tag-recurring { background: rgba(155,89,182,0.15); color: #bb8fce; }
+  .tag-reminder { background: rgba(52,152,219,0.15); color: var(--blue); }
+  .tag-cost { background: rgba(39,174,96,0.15); color: var(--green-light); }
+  .tag-overdue { background: rgba(231,76,60,0.2); color: var(--red); }
+  .tag-p1 { background: rgba(231,76,60,0.15); color: var(--p1); }
+  .tag-p2 { background: rgba(230,126,34,0.15); color: var(--p2); }
+  .tag-p3 { background: rgba(52,152,219,0.15); color: var(--p3); }
+  .task-description { font-size: 11px; color: var(--text-muted); margin-top: 2px; }
+  .task-right { flex-shrink: 0; }
+  .next-due { font-size: 11px; color: var(--text-dim); white-space: nowrap; }
+  .next-due.today { color: var(--accent); font-weight: 600; }
+  .next-due.overdue { color: var(--red); font-weight: 600; }
+
+  /* ===== TIMELINE ===== */
+  .timeline { position: relative; padding-left: 24px; }
+  .timeline::before { content: ''; position: absolute; left: 10px; top: 0; bottom: 0; width: 2px; background: var(--border); }
+  .timeline .task-item { position: relative; }
+  .timeline .task-item::before { content: ''; position: absolute; left: -20px; top: 18px; width: 10px; height: 10px; border-radius: 50%; background: var(--accent); border: 2px solid var(--bg); }
+  .timeline .task-item.completed::before { background: var(--green); }
+
+  .current-time-bar { display: flex; align-items: center; gap: 8px; margin: 10px 0; font-size: 12px; color: var(--red); font-weight: 600; }
+  .current-time-bar::after { content: ''; flex: 1; height: 1px; background: var(--red); opacity: 0.5; }
+  .current-time-bar .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--red); animation: pulse 2s infinite; }
+  @keyframes pulse { 0%,100% { opacity:1; transform:scale(1); } 50% { opacity:0.5; transform:scale(1.3); } }
+
+  /* ===== TOAST ===== */
+  .toast {
+    position: fixed; bottom: 80px; left: 50%; transform: translateX(-50%) translateY(100px);
+    background: #333; color: white; padding: 12px 20px; border-radius: 8px;
+    font-size: 14px; font-weight: 500; z-index: 999; transition: transform 0.3s;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.4);
+  }
+  .toast.show { transform: translateX(-50%) translateY(0); }
+
+  /* ===== SETTINGS PANEL ===== */
+  .settings-section { margin-bottom: 24px; }
+  .settings-section h3 { font-size: 15px; font-weight: 700; margin-bottom: 10px; }
+  .setting-row {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 12px 14px; background: var(--card); border-radius: 10px; margin-bottom: 6px;
+  }
+  .setting-row .label { font-size: 14px; font-weight: 500; }
+  .setting-row .desc { font-size: 12px; color: var(--text-dim); margin-top: 2px; }
+  .toggle {
+    width: 44px; height: 24px; border-radius: 12px; background: var(--border);
+    position: relative; cursor: pointer; transition: background 0.2s; flex-shrink: 0;
+  }
+  .toggle.on { background: var(--green); }
+  .toggle::after {
+    content: ''; position: absolute; top: 2px; left: 2px;
+    width: 20px; height: 20px; border-radius: 50%; background: white;
+    transition: transform 0.2s;
+  }
+  .toggle.on::after { transform: translateX(20px); }
+  .btn-primary {
+    background: var(--accent); border: none; color: white;
+    padding: 10px 20px; border-radius: 8px; font-size: 14px;
+    font-weight: 600; cursor: pointer; width: 100%; margin-top: 8px;
+  }
+  .btn-primary:disabled { opacity: 0.5; cursor: not-allowed; }
+
+  /* ===== ROUTE VIEW ===== */
+  .route-card {
+    background: var(--card); border-radius: 12px; padding: 16px;
+    margin-bottom: 12px; border: 1px solid var(--border);
+    cursor: pointer; transition: all 0.15s;
+  }
+  .route-card:active { transform: scale(0.98); background: var(--card-hover); }
+  .route-card-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
+  .route-slot { font-size: 16px; font-weight: 700; display: flex; align-items: center; gap: 8px; }
+  .route-type-badge {
+    display: inline-flex; padding: 3px 10px; border-radius: 12px;
+    font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px;
+  }
+  .badge-wide_circle { background: rgba(52,152,219,0.15); color: var(--blue); }
+  .badge-lollipop { background: rgba(155,89,182,0.15); color: var(--purple); }
+  .badge-figure_eight { background: rgba(230,126,34,0.15); color: var(--accent-light); }
+  .badge-zigzag { background: rgba(39,174,96,0.15); color: var(--green-light); }
+  .route-stats { display: flex; gap: 16px; margin-bottom: 12px; }
+  .route-stat { font-size: 13px; color: var(--text-dim); }
+  .route-stat strong { color: var(--text); font-weight: 600; }
+  .route-directions { list-style: none; }
+  .route-step {
+    display: flex; align-items: flex-start; gap: 10px;
+    padding: 8px 0; border-bottom: 1px solid rgba(44,62,80,0.5); font-size: 13px;
+  }
+  .route-step:last-child { border-bottom: none; }
+  .step-num {
+    width: 22px; height: 22px; border-radius: 50%; background: var(--accent);
+    color: white; display: flex; align-items: center; justify-content: center;
+    font-size: 11px; font-weight: 700; flex-shrink: 0;
+  }
+  .step-text { flex: 1; line-height: 1.4; }
+  .step-dist { color: var(--text-muted); font-size: 11px; white-space: nowrap; }
+  .route-actions { display: flex; gap: 8px; margin-top: 16px; }
+  .route-btn {
+    flex: 1; padding: 10px; border-radius: 8px; border: none;
+    font-size: 13px; font-weight: 600; cursor: pointer; text-align: center;
+  }
+  .route-btn-primary { background: var(--accent); color: white; }
+  .route-btn-secondary { background: var(--card); color: var(--text); border: 1px solid var(--border); }
+  .route-back { display: inline-flex; align-items: center; gap: 6px; color: var(--accent); font-size: 13px; font-weight: 600; cursor: pointer; margin-bottom: 16px; background: none; border: none; }
+  .env-modifiers { margin-top: 20px; padding: 14px; background: var(--card); border-radius: 10px; }
+  .env-tag { display: inline-flex; align-items: center; gap: 4px; padding: 4px 10px; border-radius: 6px; font-size: 11px; font-weight: 500; background: rgba(230,126,34,0.1); color: var(--accent-light); margin: 3px 4px 3px 0; }
+  .score-bar { height:6px; background:var(--border); border-radius:3px; overflow:hidden; margin-top:4px; }
+  .score-fill { height:100%; border-radius:3px; transition:width 0.5s; }
+  .green-badge { display:inline-flex; align-items:center; gap:3px; padding:2px 7px; border-radius:4px; font-size:10px; font-weight:500; background:rgba(39,174,96,0.15); color:var(--green-light); margin:2px 2px 0 0; }
+
+  /* ===== LEAFLET MAP ===== */
+  .route-map { width:100%; height:220px; border-radius:10px; overflow:hidden; margin-bottom:12px; z-index:1; }
+  .route-map-detail { height:280px; }
+
+  /* ===== LOADING SPINNER ===== */
+  .route-loading { text-align:center; padding:40px 20px; }
+  .route-loading .spinner { width:40px; height:40px; border:3px solid var(--border); border-top-color:var(--accent); border-radius:50%; animation:spin 0.8s linear infinite; margin:0 auto 16px; }
+  @keyframes spin { to { transform:rotate(360deg); } }
+
+  /* ===== NAV OVERLAY ===== */
+  .nav-overlay {
+    position:fixed; top:0; left:0; right:0; bottom:0; z-index:200;
+    background:var(--bg); display:flex; flex-direction:column;
+  }
+  .nav-map { flex:1; min-height:0; }
+  .nav-panel {
+    background:var(--sidebar); border-top-left-radius:20px; border-top-right-radius:20px;
+    padding:16px 16px calc(16px + var(--safe-bottom)); max-height:42vh; overflow-y:auto;
+    box-shadow:0 -4px 20px rgba(0,0,0,0.5);
+  }
+  .nav-step-active {
+    background:var(--card); border-radius:10px; padding:14px; margin-bottom:12px;
+  }
+  .nav-step-active .instruction { font-size:18px; font-weight:700; line-height:1.3; }
+  .nav-step-active .meta { font-size:13px; color:var(--text-dim); margin-top:6px; }
+  .nav-upcoming { font-size:13px; color:var(--text-muted); padding:4px 0; }
+  .nav-upcoming .upcoming-label { font-size:11px; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.5px; margin-bottom:6px; }
+  .nav-controls { display:flex; gap:10px; margin-top:12px; }
+  .nav-btn {
+    flex:1; padding:12px; border-radius:10px; border:none;
+    font-size:14px; font-weight:700; cursor:pointer; text-align:center;
+  }
+  .nav-btn-home { background:var(--blue); color:white; }
+  .nav-btn-stop { background:var(--red); color:white; }
+  .nav-btn-voice { background:var(--card); color:var(--text); border:1px solid var(--border); }
+  .nav-btn-voice.active { background:rgba(39,174,96,0.2); border-color:var(--green); color:var(--green-light); }
+  .nav-gps-status { font-size:11px; color:var(--text-muted); text-align:center; margin-top:8px; }
+  .nav-gps-status.tracking { color:var(--green-light); }
+  .nav-gps-status.error { color:var(--red); }
+
+  /* ===== ADDRESS INPUT ===== */
+  .address-input {
+    width:100%; padding:10px 12px; background:var(--bg); border:1px solid var(--border);
+    border-radius:8px; color:var(--text); font-size:14px; font-family:inherit; outline:none;
+  }
+  .address-input:focus { border-color:var(--accent); }
+  .address-current { padding:10px 14px; background:var(--card); border-radius:10px; margin-bottom:8px; }
+  .walkability-badge {
+    display:inline-flex; align-items:center; gap:4px; padding:3px 8px; border-radius:6px;
+    font-size:10px; font-weight:600; background:rgba(39,174,96,0.15); color:var(--green-light);
+    margin-top:6px;
+  }
+
+  /* ===== TASK EDITOR MODAL ===== */
+  .modal-overlay {
+    position:fixed; top:0; left:0; right:0; bottom:0; z-index:300;
+    background:rgba(0,0,0,0.7); display:flex; align-items:flex-end; justify-content:center;
+    animation: fadeIn 0.15s;
+  }
+  @keyframes fadeIn { from { opacity:0; } to { opacity:1; } }
+  .modal-sheet {
+    background:var(--sidebar); border-top-left-radius:20px; border-top-right-radius:20px;
+    width:100%; max-width:600px; max-height:85vh; overflow-y:auto;
+    padding:20px 16px calc(20px + var(--safe-bottom));
+    animation: slideUp 0.2s;
+  }
+  @keyframes slideUp { from { transform:translateY(100%); } to { transform:translateY(0); } }
+  .modal-handle { width:40px; height:4px; background:var(--border); border-radius:2px; margin:0 auto 16px; }
+  .modal-title { font-size:18px; font-weight:700; margin-bottom:16px; }
+  .form-group { margin-bottom:14px; }
+  .form-label { font-size:12px; font-weight:600; color:var(--text-dim); margin-bottom:5px; display:block; text-transform:uppercase; letter-spacing:0.5px; }
+  .form-input {
+    width:100%; padding:10px 12px; background:var(--bg); border:1px solid var(--border);
+    border-radius:8px; color:var(--text); font-size:14px; font-family:inherit; outline:none;
+  }
+  .form-input:focus { border-color:var(--accent); }
+  .form-select {
+    width:100%; padding:10px 12px; background:var(--bg); border:1px solid var(--border);
+    border-radius:8px; color:var(--text); font-size:14px; font-family:inherit; outline:none;
+    appearance:none; -webkit-appearance:none;
+    background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' fill='%2395a5a6'%3E%3Cpath d='M6 8L1 3h10z'/%3E%3C/svg%3E");
+    background-repeat:no-repeat; background-position:right 12px center;
+  }
+  .form-row { display:flex; gap:10px; }
+  .form-row > * { flex:1; }
+  .priority-picker { display:flex; gap:8px; }
+  .priority-opt {
+    flex:1; padding:8px; border-radius:8px; border:2px solid var(--border);
+    text-align:center; cursor:pointer; font-size:12px; font-weight:600; transition:all 0.15s;
+  }
+  .priority-opt.sel { border-color:currentColor; background:rgba(255,255,255,0.05); }
+  .priority-opt[data-p="1"] { color:var(--p1); }
+  .priority-opt[data-p="2"] { color:var(--p2); }
+  .priority-opt[data-p="3"] { color:var(--p3); }
+  .priority-opt[data-p="4"] { color:var(--p4); }
+  .icon-picker { display:flex; flex-wrap:wrap; gap:6px; }
+  .icon-opt {
+    width:36px; height:36px; display:flex; align-items:center; justify-content:center;
+    border-radius:8px; border:2px solid var(--border); cursor:pointer; font-size:18px;
+    transition:all 0.15s;
+  }
+  .icon-opt.sel { border-color:var(--accent); background:rgba(230,126,34,0.1); }
+  .modal-actions { display:flex; gap:10px; margin-top:20px; }
+  .modal-actions button { flex:1; padding:12px; border-radius:10px; border:none; font-size:14px; font-weight:700; cursor:pointer; }
+  .btn-save { background:var(--accent); color:white; }
+  .btn-cancel { background:var(--card); color:var(--text); border:1px solid var(--border); }
+  .btn-delete { background:var(--red); color:white; }
+  .add-task-btn {
+    display:flex; align-items:center; justify-content:center; gap:8px;
+    width:100%; padding:12px; background:var(--card); border:1px dashed var(--border);
+    border-radius:10px; color:var(--accent-light); font-size:14px; font-weight:600;
+    cursor:pointer; transition:all 0.15s; margin-bottom:6px;
+  }
+  .add-task-btn:hover { background:var(--card-hover); border-color:var(--accent); }
+
+  /* ===== NOTIFICATION STATUS ===== */
+  .notif-status-card {
+    padding:12px 14px; background:var(--card); border-radius:10px; margin-bottom:12px;
+  }
+  .notif-dot { width:8px; height:8px; border-radius:50%; display:inline-block; margin-right:6px; }
+  .notif-dot.active { background:var(--green); }
+  .notif-dot.inactive { background:var(--red); }
+  .notif-dot.limited { background:var(--accent); }
+
+  /* ===== FAB ===== */
+  .fab {
+    position:fixed; bottom:calc(74px + var(--safe-bottom)); right:16px;
+    width:52px; height:52px; border-radius:50%; background:var(--accent);
+    color:white; border:none; font-size:24px; font-weight:700;
+    display:flex; align-items:center; justify-content:center;
+    box-shadow:0 4px 16px rgba(230,126,34,0.4); cursor:pointer; z-index:50;
+    transition:transform 0.15s;
+  }
+  .fab:active { transform:scale(0.9); }
+  @media (min-width: 769px) { .fab { bottom:24px; right:24px; } }
+</style>
+</head>
+<body>
+
+<div id="app"></div>
+<div class="bottom-nav" id="bottomNav"></div>
+<div id="navOverlay" style="display:none"></div>
+<div id="taskModal"></div>
+<button class="fab" id="fab" onclick="openTaskEditor(null)" style="display:none">+</button>
+
+<script>
+// ============================================================
+// ===== TASK DATA SYSTEM (localStorage-backed, editable) =====
+// ============================================================
+
+const DEFAULT_TASKS = [
+  { id:'d1', name:'Long morning walk', type:'daily', time:'09:00', timeMinutes:540, recurrence:'daily', priority:1, reminder:30, icon:'🚶', description:'', cost:'', nextDue:null, deadline:null },
+  { id:'d2', name:'Breakfast', type:'daily', time:'09:00', timeMinutes:540, recurrence:'daily', priority:2, reminder:null, icon:'🍖', description:'', cost:'', nextDue:null, deadline:null },
+  { id:'d3', name:'Afternoon potty/quick walk', type:'daily', time:'13:00', timeMinutes:780, recurrence:'daily', priority:2, reminder:30, icon:'🐾', description:'', cost:'', nextDue:null, deadline:null },
+  { id:'d4', name:'Long, pre-dinner walk', type:'daily', time:'17:30', timeMinutes:1050, recurrence:'daily', priority:1, reminder:30, icon:'🌅', description:'', cost:'', nextDue:null, deadline:null },
+  { id:'d5', name:'Dinner', type:'daily', time:'18:00', timeMinutes:1080, recurrence:'daily', priority:1, reminder:30, icon:'🥩', description:'', cost:'', nextDue:null, deadline:null },
+  { id:'d6', name:'Bedtime potty/short walk', type:'daily', time:'21:00', timeMinutes:1260, recurrence:'daily', priority:2, reminder:30, icon:'🌙', description:'', cost:'', nextDue:null, deadline:null },
+  { id:'w1', name:'Nail Trim - $25', type:'weekly', time:null, timeMinutes:null, recurrence:'biweekly', priority:3, reminder:null, icon:'✂️', description:'Zen Dog Grooming', cost:'$25', nextDue:'2026-05-13', deadline:null },
+  { id:'w2', name:'Weekly brush', type:'weekly', time:null, timeMinutes:null, recurrence:'weekly', priority:1, reminder:null, icon:'🪮', description:'', cost:'', nextDue:'2026-05-04', deadline:null },
+  { id:'w3', name:'Bathtime', type:'weekly', time:null, timeMinutes:null, recurrence:'weekly', priority:1, reminder:null, icon:'🛁', description:'', cost:'', nextDue:'2026-05-10', deadline:null },
+  { id:'w4', name:'Nextguard+ medication', type:'weekly', time:null, timeMinutes:null, recurrence:'monthly', priority:2, reminder:null, icon:'💊', description:'Flea & tick prevention', cost:'', nextDue:'2026-05-19', deadline:null },
+  { id:'w5', name:'Order Water Fountain Filters - $23', type:'weekly', time:null, timeMinutes:null, recurrence:'monthly', priority:3, reminder:null, icon:'⛲', description:'SIBAYS 4Gal/15L replacement filters', cost:'$23', nextDue:'2026-05-04', deadline:null }
+];
+
+function loadAllTasks() {
+  try {
+    const saved = JSON.parse(localStorage.getItem('wc_tasks_v2'));
+    if (saved && Array.isArray(saved) && saved.length > 0) return saved;
+  } catch(e) {}
+  // Seed defaults
+  const tasks = JSON.parse(JSON.stringify(DEFAULT_TASKS));
+  saveAllTasks(tasks);
+  return tasks;
+}
+function saveAllTasks(tasks) {
+  try { localStorage.setItem('wc_tasks_v2', JSON.stringify(tasks)); } catch(e) {}
+  // v7: sync task changes to push worker
+  syncTasksToWorker();
+}
+function getTask(id) { return loadAllTasks().find(t => t.id === id); }
+function getDailyTasks() { return loadAllTasks().filter(t => t.type === 'daily').sort((a,b) => (a.timeMinutes||0) - (b.timeMinutes||0)); }
+function getWeeklyTasks() { return loadAllTasks().filter(t => t.type === 'weekly').sort((a,b) => a.priority - b.priority); }
+
+function saveTask(task) {
+  const tasks = loadAllTasks();
+  const idx = tasks.findIndex(t => t.id === task.id);
+  if (idx >= 0) tasks[idx] = task;
+  else tasks.push(task);
+  saveAllTasks(tasks);
+}
+
+function deleteTask(id) {
+  const tasks = loadAllTasks().filter(t => t.id !== id);
+  saveAllTasks(tasks);
+}
+
+function generateTaskId() { return 't_' + Date.now() + '_' + Math.random().toString(36).substr(2,6); }
+
+function parseTimeToMinutes(timeStr) {
+  if (!timeStr) return null;
+  const [h, m] = timeStr.split(':').map(Number);
+  return h * 60 + (m || 0);
+}
+
+function formatTime24to12(timeStr) {
+  if (!timeStr) return '';
+  const [h, m] = timeStr.split(':').map(Number);
+  const ampm = h >= 12 ? 'PM' : 'AM';
+  const h12 = h === 0 ? 12 : (h > 12 ? h - 12 : h);
+  return `${h12}:${String(m).padStart(2, '0')} ${ampm}`;
+}
+
+const RECURRENCE_LABELS = {
+  daily: 'Every day', weekly: 'Every week', biweekly: 'Every 2 weeks',
+  monthly: 'Every month', custom: 'Custom'
+};
+
+function toDateStr(d) {
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+}
+
+// Advanced recurrence engine
+// Task fields: repeat_interval_value, repeat_interval_unit, repeat_basis, repeat_end_date, last_completed_date
+function computeNextDue(task, completionDate) {
+  const today = completionDate ? new Date(completionDate) : new Date();
+  today.setHours(0,0,0,0);
+
+  // === Custom recurrence (v8 advanced) ===
+  if (task.recurrence === 'custom' && task.repeat_interval_value && task.repeat_interval_unit) {
+    const val = parseInt(task.repeat_interval_value) || 1;
+    const unit = task.repeat_interval_unit;
+    const basis = task.repeat_basis || 'scheduled';
+
+    let baseDate;
+    if (basis === 'completed') {
+      // Next due = completion date + interval
+      baseDate = new Date(today);
+    } else {
+      // Next due = previous due date + interval (fixed cadence)
+      baseDate = task.nextDue ? new Date(task.nextDue + 'T12:00:00') : new Date(today);
+    }
+
+    let next = new Date(baseDate);
+    switch (unit) {
+      case 'day': next.setDate(next.getDate() + val); break;
+      case 'week': next.setDate(next.getDate() + (val * 7)); break;
+      case 'month': next.setMonth(next.getMonth() + val); break;
+      case 'year': next.setFullYear(next.getFullYear() + val); break;
+      default: next.setDate(next.getDate() + val); break;
+    }
+
+    // Check end condition
+    if (task.repeat_end_date) {
+      const endDate = new Date(task.repeat_end_date + 'T23:59:59');
+      if (next > endDate) return null; // recurrence ended
+    }
+
+    return toDateStr(next);
+  }
+
+  // === Legacy preset recurrence ===
+  let next = new Date(today);
+  switch (task.recurrence) {
+    case 'daily': next.setDate(next.getDate() + 1); break;
+    case 'weekly': next.setDate(next.getDate() + 7); break;
+    case 'biweekly': next.setDate(next.getDate() + 14); break;
+    case 'monthly': next.setMonth(next.getMonth() + 1); break;
+    default: next.setDate(next.getDate() + 7); break;
+  }
+  return toDateStr(next);
+}
+
+// Format custom recurrence for display
+function formatRecurrence(task) {
+  if (task.recurrence !== 'custom') return RECURRENCE_LABELS[task.recurrence] || task.recurrence;
+  const val = task.repeat_interval_value || 1;
+  const unit = task.repeat_interval_unit || 'day';
+  const unitLabels = { day: ['day','days'], week: ['week','weeks'], month: ['month','months'], year: ['year','years'] };
+  const label = unitLabels[unit] || [unit, unit+'s'];
+  const basis = task.repeat_basis === 'completed' ? ' (after completion)' : '';
+  if (val === 1) return `Every ${label[0]}${basis}`;
+  return `Every ${val} ${label[1]}${basis}`;
+}
+
+// ===== STATE =====
+let state = {
+  view: 'today',
+  completedToday: {},
+  completedWeekly: {},
+  notificationsEnabled: false,
+  routeDetail: null,
+  navActive: false, navRoute: null, navStep: 0, navWatchId: null,
+  navUserPos: null, navVoice: true, navMap: null, navMarker: null, navLine: null,
+  editingTask: null // task id being edited, or 'new'
+};
+
+function loadState() {
+  try {
+    state.completedToday = JSON.parse(localStorage.getItem('wc_completed') || '{}');
+    state.completedWeekly = JSON.parse(localStorage.getItem('wc_weekly_completed') || '{}');
+    state.notificationsEnabled = localStorage.getItem('wc_notif') === 'true';
+  } catch(e) {}
+}
+function saveState() {
+  try {
+    localStorage.setItem('wc_completed', JSON.stringify(state.completedToday));
+    localStorage.setItem('wc_weekly_completed', JSON.stringify(state.completedWeekly));
+    localStorage.setItem('wc_notif', state.notificationsEnabled ? 'true' : 'false');
+  } catch(e) {}
+}
+loadState();
+
+// ===== HELPERS =====
+const getNow = () => new Date();
+const getCurrentMinutes = () => { const n=getNow(); return n.getHours()*60+n.getMinutes(); };
+const getTodayKey = () => { const d=getNow(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`; };
+
+function formatDate(ds) {
+  if (!ds) return '';
+  const d=new Date(ds+'T12:00:00'), today=getNow(); today.setHours(12,0,0,0);
+  const diff=Math.floor((d-today)/(864e5));
+  if(diff===0) return 'Today'; if(diff===1) return 'Tomorrow';
+  if(diff<0) return `${Math.abs(diff)}d overdue`;
+  if(diff<7) return d.toLocaleDateString('en-US',{weekday:'long'});
+  return d.toLocaleDateString('en-US',{month:'short',day:'numeric'});
+}
+const isOverdue = ds => ds && new Date(ds+'T23:59:59') < getNow();
+const isDueToday = ds => ds === getTodayKey();
+const getDailyCompleted = () => state.completedToday[getTodayKey()] || [];
+const isDailyDone = id => getDailyCompleted().includes(id);
+const isWeeklyDone = id => (state.completedWeekly[getTodayKey()] || []).includes(id);
+
+function toggleDaily(id) {
+  const k=getTodayKey(); if(!state.completedToday[k]) state.completedToday[k]=[];
+  const a=state.completedToday[k], i=a.indexOf(id);
+  if(i>=0) { a.splice(i,1); }
+  else {
+    a.push(id);
+    showToast('Done! Whiteclaw says thanks 🐕');
+    clearNotificationsForTask(id);
+    notifyWorkerTaskComplete(id); // v7: tell server
+  }
+  saveState(); render();
+}
+
+function toggleWeekly(id) {
+  const k=getTodayKey(); if(!state.completedWeekly[k]) state.completedWeekly[k]=[];
+  const a=state.completedWeekly[k], i=a.indexOf(id);
+  if(i>=0) { a.splice(i,1); }
+  else {
+    a.push(id);
+    showToast('Done! Good dog parent 🐾');
+    clearNotificationsForTask(id);
+    notifyWorkerTaskComplete(id); // v7: tell server
+    // Advance recurring task to next due date
+    const task = getTask(id);
+    if (task && task.recurrence) {
+      task.last_completed_date = getTodayKey();
+      const nextDue = computeNextDue(task, getTodayKey());
+      if (nextDue) {
+        task.nextDue = nextDue;
+      } else {
+        // Recurrence ended — clear nextDue
+        task.nextDue = null;
+      }
+      saveTask(task);
+    }
+  }
+  saveState(); render();
+}
+
+function getStats() {
+  const daily = getDailyTasks();
+  const weekly = getWeeklyTasks();
+  const dd=daily.filter(t=>isDailyDone(t.id)).length, td=daily.length;
+  const wdue=weekly.filter(t=>isDueToday(t.nextDue)||isOverdue(t.nextDue)).length;
+  const wdone=weekly.filter(t=>(isDueToday(t.nextDue)||isOverdue(t.nextDue))&&isWeeklyDone(t.id)).length;
+  const total=td+wdue, done=dd+wdone;
+  return { dd, td, wdue, wdone, done, total, pct: total>0?Math.round(done/total*100):0 };
+}
+
+function showToast(msg) {
+  document.querySelectorAll('.toast').forEach(t=>t.remove());
+  const t=document.createElement('div'); t.className='toast'; t.textContent=msg;
+  document.body.appendChild(t);
+  requestAnimationFrame(()=>t.classList.add('show'));
+  setTimeout(()=>{ t.classList.remove('show'); setTimeout(()=>t.remove(),300); },2500);
+}
+function setView(v) { if(state.navActive) stopNavigation(); state.view=v; state.routeDetail=null; render(); }
+
+// ============================================================
+// ===== NOTIFICATION ENGINE (iOS-compatible) =================
+// ============================================================
+
+// Notification state persisted in localStorage
+function getNotifLog() { try { return JSON.parse(localStorage.getItem('wc_notif_log')||'{}'); } catch(e) { return {}; } }
+function saveNotifLog(log) { try { localStorage.setItem('wc_notif_log', JSON.stringify(log)); } catch(e) {} }
+
+// ===== PUSH NOTIFICATION CONFIG =====
+// IMPORTANT: Update this URL after deploying your Cloudflare Worker
+const PUSH_WORKER_URL = 'https://whiteclaw-push.choppeddubs.workers.dev';
+const VAPID_PUBLIC_KEY = 'BOZXNbP9zqAxyH5FzIa4vbtfPDQtcyjd2nF0pMwkZv8rGAFbDPu6mlkGapgpw5ON7dHVpo8oB-z_-NO3leEE68k';
+
+function isIOS() { return /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1); }
+function isPWA() { return window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true; }
+
+async function requestNotifPermission() {
+  if (!('Notification' in window)) {
+    if (isIOS() && !isPWA()) {
+      showToast('Add to Home Screen first, then enable notifications');
+    } else {
+      showToast('Notifications not supported in this browser');
+    }
+    return;
+  }
+  try {
+    const perm = await Notification.requestPermission();
+    state.notificationsEnabled = perm === 'granted';
+    saveState();
+    if (perm === 'granted') {
+      showToast('Notifications enabled! 🔔');
+      scheduleNotificationCheck();
+      // v7: Also subscribe to server-sent push notifications
+      subscribeToPush().then(sub => {
+        if (sub) showToast('Background push enabled! Notifications work even when app is closed.');
+      });
+    } else if (perm === 'denied') {
+      showToast('Notifications blocked — check your device settings');
+    } else {
+      showToast('Notification permission dismissed — try again');
+    }
+  } catch(e) {
+    showToast('Error requesting permission: ' + e.message);
+  }
+  render();
+}
+
+// ===== WEB PUSH SUBSCRIPTION (v7 — server-sent notifications) =====
+
+function urlBase64ToUint8Array(base64String) {
+  const padding = '='.repeat((4 - base64String.length % 4) % 4);
+  const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
+  const rawData = atob(base64);
+  const outputArray = new Uint8Array(rawData.length);
+  for (let i = 0; i < rawData.length; ++i) outputArray[i] = rawData.charCodeAt(i);
+  return outputArray;
+}
+
+async function subscribeToPush() {
+  try {
+    if (!('PushManager' in window)) {
+      console.log('Push API not supported');
+      return null;
+    }
+    const reg = await navigator.serviceWorker.ready;
+    // Check existing subscription
+    let sub = await reg.pushManager.getSubscription();
+    if (sub) {
+      console.log('Already subscribed to push');
+      await syncPushSubscription(sub);
+      return sub;
+    }
+    // Subscribe
+    sub = await reg.pushManager.subscribe({
+      userVisibleOnly: true,
+      applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY)
+    });
+    console.log('Push subscription created');
+    await syncPushSubscription(sub);
+    return sub;
+  } catch (e) {
+    console.warn('Push subscription failed:', e);
+    return null;
+  }
+}
+
+async function syncPushSubscription(sub) {
+  if (!sub) return;
+  try {
+    const tasks = getDailyTasks().map(t => ({
+      id: t.id, name: t.name, type: t.type,
+      timeMinutes: t.timeMinutes, time: t.time,
+      reminder: t.reminder || 30, priority: t.priority
+    }));
+    const resp = await fetch(PUSH_WORKER_URL + '/subscribe', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        subscription: sub.toJSON(),
+        tasks,
+        tzOffset: new Date().getTimezoneOffset()
+      })
+    });
+    if (resp.ok) {
+      localStorage.setItem('wc_push_active', 'true');
+      console.log('Push subscription synced with server');
+    }
+  } catch (e) {
+    console.warn('Failed to sync push subscription:', e);
+  }
+}
+
+async function syncTasksToWorker() {
+  if (localStorage.getItem('wc_push_active') !== 'true') return;
+  try {
+    const reg = await navigator.serviceWorker.ready;
+    const sub = await reg.pushManager.getSubscription();
+    if (!sub) return;
+    const tasks = getDailyTasks().map(t => ({
+      id: t.id, name: t.name, type: t.type,
+      timeMinutes: t.timeMinutes, time: t.time,
+      reminder: t.reminder || 30, priority: t.priority
+    }));
+    await fetch(PUSH_WORKER_URL + '/update-tasks', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ endpoint: sub.endpoint, tasks })
+    });
+  } catch (e) {
+    console.warn('Failed to sync tasks to worker:', e);
+  }
+}
+
+async function notifyWorkerTaskComplete(taskId) {
+  if (localStorage.getItem('wc_push_active') !== 'true') return;
+  try {
+    const reg = await navigator.serviceWorker.ready;
+    const sub = await reg.pushManager.getSubscription();
+    if (!sub) return;
+    await fetch(PUSH_WORKER_URL + '/complete-task', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ endpoint: sub.endpoint, taskId })
+    });
+  } catch (e) {
+    console.warn('Failed to notify worker of task completion:', e);
+  }
+}
+
+async function unsubscribeFromPush() {
+  try {
+    const reg = await navigator.serviceWorker.ready;
+    const sub = await reg.pushManager.getSubscription();
+    if (sub) {
+      await fetch(PUSH_WORKER_URL + '/unsubscribe', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ endpoint: sub.endpoint })
+      }).catch(() => {});
+      await sub.unsubscribe();
+    }
+    localStorage.removeItem('wc_push_active');
+    console.log('Unsubscribed from push');
+  } catch (e) {
+    console.warn('Unsubscribe failed:', e);
+  }
+}
+
+// Show notification via Service Worker (iOS-compatible)
+async function showSWNotification(title, body, tag, taskId) {
+  try {
+    const reg = await navigator.serviceWorker.ready;
+    // Use postMessage to SW for iOS compatibility
+    reg.active.postMessage({
+      type: 'SHOW_NOTIFICATION',
+      title, body, tag,
+      data: { taskId },
+      actions: [
+        { action: 'complete', title: 'Complete Task' },
+        { action: 'snooze', title: 'Snooze 15m' }
+      ]
+    });
+    return true;
+  } catch(e) {
+    // Fallback: try direct Notification API (works on desktop/Android)
+    try {
+      new Notification(title, { body, tag, requireInteraction: true });
+      return true;
+    } catch(e2) {
+      console.warn('Notification failed:', e2);
+      return false;
+    }
+  }
+}
+
+function clearNotificationsForTask(taskId) {
+  // Clear persistent reminder tracking for this task
+  const log = getNotifLog();
+  const todayKey = getTodayKey();
+  Object.keys(log).forEach(k => {
+    if (k.startsWith(`${todayKey}-${taskId}`)) delete log[k];
+  });
+  // Mark task as "notifs cleared" so persistent reminders stop
+  log[`${todayKey}-${taskId}-cleared`] = Date.now();
+  saveNotifLog(log);
+}
+
+// Main notification check — runs every 30 seconds in foreground
+function checkAndNotify() {
+  if (!state.notificationsEnabled || !('Notification' in window) || Notification.permission !== 'granted') return;
+
+  const now = getCurrentMinutes();
+  const nowMs = Date.now();
+  const todayKey = getTodayKey();
+  const log = getNotifLog();
+  const daily = getDailyTasks();
+
+  // Clean old log entries (keep only today)
+  Object.keys(log).forEach(k => {
+    if (!k.startsWith(todayKey)) delete log[k];
+  });
+
+  daily.forEach(task => {
+    if (!task.timeMinutes) return;
+    const isComplete = isDailyDone(task.id);
+    const cleared = log[`${todayKey}-${task.id}-cleared`];
+    if (isComplete || cleared) return;
+
+    const taskTime = task.timeMinutes;
+    const reminderTime = task.reminder ? taskTime - task.reminder : null;
+
+    // 1. Pre-task reminder (30 min before by default)
+    if (reminderTime !== null && now >= reminderTime && now < taskTime) {
+      const rKey = `${todayKey}-${task.id}-pre`;
+      if (!log[rKey]) {
+        log[rKey] = nowMs;
+        showSWNotification(
+          `🔔 Coming up: ${task.name}`,
+          `In ${task.reminder} minutes (${formatTime24to12(task.time)})`,
+          rKey, task.id
+        );
+      }
+    }
+
+    // 2. At exact task time
+    if (now >= taskTime) {
+      const tKey = `${todayKey}-${task.id}-due`;
+      if (!log[tKey]) {
+        log[tKey] = nowMs;
+        showSWNotification(
+          `🐕 ${task.name}`,
+          `It's ${formatTime24to12(task.time)}! Time for ${task.name.toLowerCase()}.`,
+          tKey, task.id
+        );
+      }
+    }
+
+    // 3. Persistent reminders every 30 minutes after task time if not completed
+    if (now > taskTime) {
+      const minutesPast = now - taskTime;
+      const intervals = Math.floor(minutesPast / 30);
+      if (intervals > 0) {
+        const pKey = `${todayKey}-${task.id}-persist-${intervals}`;
+        if (!log[pKey]) {
+          log[pKey] = nowMs;
+          const hoursPast = Math.floor(minutesPast / 60);
+          const minsPast = minutesPast % 60;
+          const timeAgo = hoursPast > 0 ? `${hoursPast}h ${minsPast}m` : `${minsPast}m`;
+          showSWNotification(
+            `⚠️ Overdue: ${task.name}`,
+            `Was due ${timeAgo} ago at ${formatTime24to12(task.time)}. Tap to mark complete.`,
+            pKey, task.id
+          );
+        }
+      }
+    }
+  });
+
+  // Also check weekly tasks due today
+  getWeeklyTasks().forEach(task => {
+    if (!isDueToday(task.nextDue) && !isOverdue(task.nextDue)) return;
+    if (isWeeklyDone(task.id)) return;
+    const cleared = log[`${todayKey}-${task.id}-cleared`];
+    if (cleared) return;
+
+    const wKey = `${todayKey}-${task.id}-weekly`;
+    if (!log[wKey]) {
+      log[wKey] = nowMs;
+      showSWNotification(
+        `📋 ${task.name}`,
+        isOverdue(task.nextDue) ? 'This task is overdue!' : 'Due today — don\'t forget!',
+        wKey, task.id
+      );
+    }
+
+    // Persistent: remind every 2 hours for weekly overdue
+    if (isOverdue(task.nextDue)) {
+      const hours = Math.floor((nowMs - (log[wKey] || nowMs)) / (2 * 60 * 60 * 1000));
+      if (hours > 0) {
+        const wpKey = `${todayKey}-${task.id}-weekly-p${hours}`;
+        if (!log[wpKey]) {
+          log[wpKey] = nowMs;
+          showSWNotification(
+            `⚠️ Still due: ${task.name}`,
+            `Overdue — ${formatDate(task.nextDue)}`,
+            wpKey, task.id
+          );
+        }
+      }
+    }
+  });
+
+  saveNotifLog(log);
+}
+
+// Schedule notification checks
+let notifInterval = null;
+function scheduleNotificationCheck() {
+  if (notifInterval) clearInterval(notifInterval);
+  notifInterval = setInterval(checkAndNotify, 30000); // Every 30 seconds
+  checkAndNotify(); // Immediate check
+}
+
+// Re-check when app returns to foreground
+document.addEventListener('visibilitychange', () => {
+  if (!document.hidden) {
+    checkAndNotify();
+    render();
+    // v8: Check for tasks completed from notifications while app was backgrounded
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.ready.then(reg => {
+        if (reg.active) reg.active.postMessage({ type: 'GET_BG_COMPLETIONS' });
+      });
+    }
+  }
+});
+
+// Listen for SW messages (e.g. "complete task" from notification action)
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.addEventListener('message', e => {
+    if (e.data?.type === 'COMPLETE_TASK') {
+      const task = getTask(e.data.taskId);
+      if (task) {
+        if (task.type === 'daily') toggleDaily(task.id);
+        else toggleWeekly(task.id);
+      }
+    }
+    // Receive background completions (tasks completed while app was closed)
+    if (e.data?.type === 'BG_COMPLETIONS' && e.data.completions?.length) {
+      let count = 0;
+      for (const c of e.data.completions) {
+        const task = getTask(c.taskId);
+        if (!task) continue;
+        if (task.type === 'daily' && !isDailyDone(c.taskId)) {
+          const k = getTodayKey();
+          if (!state.completedToday[k]) state.completedToday[k] = [];
+          if (!state.completedToday[k].includes(c.taskId)) {
+            state.completedToday[k].push(c.taskId);
+            count++;
+          }
+        } else if (task.type === 'weekly' && !isWeeklyDone(c.taskId)) {
+          const k = getTodayKey();
+          if (!state.completedWeekly[k]) state.completedWeekly[k] = [];
+          if (!state.completedWeekly[k].includes(c.taskId)) {
+            state.completedWeekly[k].push(c.taskId);
+            // Advance recurring task
+            if (task.recurrence) {
+              task.last_completed_date = getTodayKey();
+              const nextDue = computeNextDue(task, getTodayKey());
+              if (nextDue) task.nextDue = nextDue;
+              else task.nextDue = null;
+              saveTask(task);
+            }
+            count++;
+          }
+        }
+      }
+      if (count > 0) {
+        saveState();
+        render();
+        showToast(`${count} task${count>1?'s':''} completed from notifications`);
+      }
+    }
+  });
+
+  // On app load, ask SW for any background completions
+  navigator.serviceWorker.ready.then(reg => {
+    if (reg.active) {
+      reg.active.postMessage({ type: 'GET_BG_COMPLETIONS' });
+    }
+  });
+}
+
+// ============================================================
+// ===== HOME LOCATION SERVICE =====
+// ============================================================
+const DEFAULT_HOME = { lat: 30.24365, lon: -81.51530, address: '1715 Hodges Blvd, Apt 509, Jacksonville, FL 32224' };
+
+function getHomeLocation() {
+  try {
+    const saved = JSON.parse(localStorage.getItem('wc_home'));
+    if (saved?.lat && saved?.lon && saved?.address) return saved;
+  } catch(e) {}
+  return { ...DEFAULT_HOME };
+}
+
+function saveHomeLocation(lat, lon, address) {
+  const loc = { lat, lon, address };
+  try { localStorage.setItem('wc_home', JSON.stringify(loc)); } catch(e) {}
+  try { localStorage.removeItem('wc_routes'); } catch(e) {}
+  routeLoadingState = 'idle';
+  return loc;
+}
+
+async function geocodeAddress(address) {
+  const url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(address)}&limit=1&countrycodes=us`;
+  const resp = await fetch(url, { headers: { 'Accept': 'application/json' } });
+  if (!resp.ok) throw new Error('Geocoding request failed');
+  const data = await resp.json();
+  if (!data.length) throw new Error('Address not found — try including city and state');
+  return { lat: parseFloat(data[0].lat), lon: parseFloat(data[0].lon), display: data[0].display_name };
+}
+
+async function updateHomeAddress(address) {
+  if (!address || !address.trim()) { showToast('Enter an address first'); return; }
+  showToast('Looking up address...');
+  try {
+    const geo = await geocodeAddress(address.trim());
+    saveHomeLocation(geo.lat, geo.lon, address.trim());
+    showToast('Home updated! Generating new routes...');
+    render();
+    loadTodayRoutes();
+  } catch(e) {
+    showToast('Error: ' + e.message);
+  }
+}
+
+// ============================================================
+// ===== ROUTE GENERATION ENGINE v2 (Loop Patterns + Scoring) =
+// ============================================================
+
+// Seeded PRNG (mulberry32)
+function rngCreate(seed) {
+  let s = seed >>> 0;
+  return () => { s|=0; s=s+0x6D2B79F5|0; let t=Math.imul(s^s>>>15,1|s); t=t+Math.imul(t^t>>>7,61|t)^t; return((t^t>>>14)>>>0)/4294967296; };
+}
+function rngHash(str) { let h=0; for(let i=0;i<str.length;i++) h=Math.imul(31,h)+str.charCodeAt(i)|0; return h>>>0; }
+
+function haversine(lat1,lon1,lat2,lon2) {
+  const R=3958.8, dLat=(lat2-lat1)*Math.PI/180, dLon=(lon2-lon1)*Math.PI/180;
+  const a=Math.sin(dLat/2)**2+Math.cos(lat1*Math.PI/180)*Math.cos(lat2*Math.PI/180)*Math.sin(dLon/2)**2;
+  return R*2*Math.atan2(Math.sqrt(a),Math.sqrt(1-a));
+}
+
+function calcWaypoint(lat, lon, bearingDeg, distMiles) {
+  const R = 3958.8;
+  const lat1 = lat * Math.PI / 180, lon1 = lon * Math.PI / 180;
+  const brng = bearingDeg * Math.PI / 180, d = distMiles / R;
+  const lat2 = Math.asin(Math.sin(lat1)*Math.cos(d) + Math.cos(lat1)*Math.sin(d)*Math.cos(brng));
+  const lon2 = lon1 + Math.atan2(Math.sin(brng)*Math.sin(d)*Math.cos(lat1), Math.cos(d)-Math.sin(lat1)*Math.sin(lat2));
+  return { lat: lat2*180/Math.PI, lon: lon2*180/Math.PI };
+}
+
+const OSRM_FOOT = 'https://routing.openstreetmap.de/routed-foot/route/v1/driving';
+
+async function fetchWalkingRoute(waypoints) {
+  const coordStr = waypoints.map(w => `${w.lon},${w.lat}`).join(';');
+  const url = `${OSRM_FOOT}/${coordStr}?overview=full&geometries=geojson&steps=true`;
+  const resp = await fetch(url);
+  if (!resp.ok) throw new Error('Route server returned ' + resp.status);
+  const data = await resp.json();
+  if (data.code !== 'Ok' || !data.routes?.length) return null;
+  return data.routes[0];
+}
+
+function extractDirections(osrmRoute, homeAddr) {
+  const dirs = [];
+  for (const leg of osrmRoute.legs) {
+    for (const step of leg.steps) {
+      if (step.distance < 3 && step.maneuver.type !== 'arrive' && step.maneuver.type !== 'depart') continue;
+      const name = step.name || 'path';
+      const distMi = Math.round(step.distance * 0.000621371 * 100) / 100;
+      let instruction = '';
+      switch(step.maneuver.type) {
+        case 'depart': instruction = `Head ${step.maneuver.modifier||'straight'} on ${name}`.replace(/  +/g,' ').trim(); break;
+        case 'arrive': instruction = `Arrive at ${homeAddr||'destination'}`; break;
+        case 'turn': case 'end of road': case 'fork': {
+          const mod = step.maneuver.modifier||'';
+          if (mod.includes('sharp') && mod.includes('left')) instruction = `Sharp left onto ${name}`;
+          else if (mod.includes('sharp') && mod.includes('right')) instruction = `Sharp right onto ${name}`;
+          else if (mod.includes('left')) instruction = `Turn left onto ${name}`;
+          else if (mod.includes('right')) instruction = `Turn right onto ${name}`;
+          else if (mod.includes('straight')) instruction = `Continue straight on ${name}`;
+          else if (mod.includes('uturn')) instruction = `U-turn onto ${name}`;
+          else instruction = `Continue on ${name}`;
+          break;
+        }
+        case 'new name': case 'continue': instruction = `Continue onto ${name}`; break;
+        case 'roundabout': case 'rotary': instruction = `At roundabout, exit onto ${name}`; break;
+        default: instruction = `Continue on ${name}`;
+      }
+      dirs.push({ instruction, street: name, distance: distMi });
+    }
+  }
+  const merged = [];
+  for (const d of dirs) {
+    if (merged.length && merged[merged.length-1].street === d.street && d.street && d.instruction.startsWith('Continue')) {
+      merged[merged.length-1].distance = Math.round((merged[merged.length-1].distance + d.distance)*100)/100;
+    } else { merged.push({...d}); }
+  }
+  return merged;
+}
+
+function hashRouteCoords(coords) {
+  const step = Math.max(1, Math.floor(coords.length / 20));
+  const sample = coords.filter((_, i) => i % step === 0);
+  return sample.map(c => `${Math.round(c[0]*200)},${Math.round(c[1]*200)}`).join('|');
+}
+function routeSimilarity(h1, h2) {
+  if (!h1||!h2) return 0;
+  const s1=new Set(h1.split('|')), s2=new Set(h2.split('|'));
+  let shared=0; s1.forEach(x=>{ if(s2.has(x)) shared++; });
+  return shared/Math.max(s1.size, s2.size);
+}
+
+const LOOP_PATTERNS = {
+  wide_circle: {
+    desc: 'Wide neighborhood loop', icon: '🔵',
+    generate(home, rng, attempt) {
+      const n = 3 + Math.floor(rng() * 2);
+      const baseAngle = rng() * 360;
+      const radius = 0.14 + rng() * 0.08 + attempt * 0.015;
+      const wps = [];
+      for (let i = 0; i < n; i++) {
+        const angle = baseAngle + (i * 360 / n) + (rng() - 0.5) * 30;
+        const r = radius + (rng() - 0.5) * 0.04;
+        wps.push(calcWaypoint(home.lat, home.lon, angle, r));
+      }
+      return wps;
+    }
+  },
+  lollipop: {
+    desc: 'Stem + loop pattern', icon: '🍭',
+    generate(home, rng, attempt) {
+      const stemBearing = rng() * 360;
+      const stemDist = 0.15 + rng() * 0.10 + attempt * 0.01;
+      const stemEnd = calcWaypoint(home.lat, home.lon, stemBearing, stemDist);
+      const loopRadius = 0.08 + rng() * 0.06;
+      const wps = [stemEnd];
+      for (let i = 0; i < 3; i++) {
+        const angle = stemBearing + 90 + (i * 120) + (rng() - 0.5) * 20;
+        wps.push(calcWaypoint(stemEnd.lat, stemEnd.lon, angle, loopRadius));
+      }
+      return wps;
+    }
+  },
+  figure_eight: {
+    desc: 'Figure-8 dual loop', icon: '8️⃣',
+    generate(home, rng, attempt) {
+      const bearing1 = rng() * 360;
+      const bearing2 = (bearing1 + 180 + (rng() - 0.5) * 40) % 360;
+      const dist = 0.12 + rng() * 0.08 + attempt * 0.01;
+      const wps = [];
+      const c1 = calcWaypoint(home.lat, home.lon, bearing1, dist);
+      wps.push(calcWaypoint(c1.lat, c1.lon, (bearing1 + 90) % 360, 0.05 + rng() * 0.04));
+      wps.push(c1);
+      const c2 = calcWaypoint(home.lat, home.lon, bearing2, dist);
+      wps.push(calcWaypoint(c2.lat, c2.lon, (bearing2 + 90) % 360, 0.05 + rng() * 0.04));
+      wps.push(c2);
+      return wps;
+    }
+  },
+  zigzag: {
+    desc: 'Zigzag neighborhood walk', icon: '⚡',
+    generate(home, rng, attempt) {
+      const mainBearing = rng() * 360;
+      const n = 3 + Math.floor(rng() * 2);
+      const spread = 0.06 + rng() * 0.04;
+      const wps = [];
+      for (let i = 0; i < n; i++) {
+        const fwd = (i + 1) * (0.06 + rng() * 0.04) + attempt * 0.005;
+        const side = ((i % 2 === 0) ? 1 : -1) * (spread + rng() * 0.03);
+        const fwdPt = calcWaypoint(home.lat, home.lon, mainBearing, fwd);
+        const sideBearing = (mainBearing + ((i % 2 === 0) ? 90 : -90) + 360) % 360;
+        wps.push(calcWaypoint(fwdPt.lat, fwdPt.lon, sideBearing, Math.abs(side)));
+      }
+      return wps;
+    }
+  }
+};
+const PATTERN_KEYS = Object.keys(LOOP_PATTERNS);
+
+// Green space discovery
+let greenSpacesCache = null;
+let greenSpacesCacheTime = 0;
+const GREEN_CACHE_MS = 7 * 24 * 60 * 60 * 1000;
+
+function loadGreenSpacesFromStorage() {
+  try {
+    const d = JSON.parse(localStorage.getItem('wc_green_spaces'));
+    if (d && d.time && (Date.now() - d.time) < GREEN_CACHE_MS && d.home) {
+      const home = getHomeLocation();
+      if (haversine(d.home.lat, d.home.lon, home.lat, home.lon) < 0.5) {
+        greenSpacesCache = d.spaces;
+        greenSpacesCacheTime = d.time;
+        return true;
+      }
+    }
+  } catch(e) {}
+  return false;
+}
+
+async function loadGreenSpaces() {
+  if (greenSpacesCache && (Date.now() - greenSpacesCacheTime) < GREEN_CACHE_MS) return greenSpacesCache;
+  if (loadGreenSpacesFromStorage()) return greenSpacesCache;
+  const home = getHomeLocation();
+  const radius = 800;
+  const query = `[out:json][timeout:10];(node["leisure"~"park|garden|dog_park|playground"](around:${radius},${home.lat},${home.lon});way["leisure"~"park|garden|dog_park|playground"](around:${radius},${home.lat},${home.lon});node["landuse"="grass"](around:${radius},${home.lat},${home.lon});way["natural"="grassland"](around:${radius},${home.lat},${home.lon}););out center body;`;
+  try {
+    const resp = await fetch('https://overpass-api.de/api/interpreter', {
+      method: 'POST', body: 'data=' + encodeURIComponent(query),
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' }
+    });
+    if (!resp.ok) throw new Error('Overpass failed');
+    const data = await resp.json();
+    const spaces = [], seen = new Set();
+    for (const el of data.elements) {
+      const lat = el.lat || el.center?.lat, lon = el.lon || el.center?.lon;
+      if (!lat || !lon) continue;
+      const key = `${Math.round(lat*1000)},${Math.round(lon*1000)}`;
+      if (seen.has(key)) continue; seen.add(key);
+      const tags = el.tags || {};
+      spaces.push({ lat, lon, name: tags.name || tags.leisure || 'green space', type: tags.leisure || tags.landuse || 'park', dist: haversine(home.lat, home.lon, lat, lon) });
+    }
+    spaces.sort((a, b) => a.dist - b.dist);
+    greenSpacesCache = spaces.slice(0, 15);
+    greenSpacesCacheTime = Date.now();
+    try { localStorage.setItem('wc_green_spaces', JSON.stringify({ spaces: greenSpacesCache, time: greenSpacesCacheTime, home: { lat: home.lat, lon: home.lon } })); } catch(e) {}
+    return greenSpacesCache;
+  } catch(e) {
+    console.warn('Green space lookup failed:', e.message);
+    greenSpacesCache = greenSpacesCache || [];
+    return greenSpacesCache;
+  }
+}
+
+function pickGreenSpaceWaypoints(wps, greenSpaces, rng) {
+  if (!greenSpaces?.length) return [];
+  const picked = [];
+  for (const gs of greenSpaces) {
+    if (picked.length >= 2) break;
+    if (wps.some(w => haversine(w.lat, w.lon, gs.lat, gs.lon) < 0.15) && rng() > 0.3) {
+      picked.push({ lat: gs.lat, lon: gs.lon, name: gs.name, type: gs.type });
+    }
+  }
+  return picked;
+}
+
+const MAIN_ROAD_RE = /\b(boulevard|blvd|highway|hwy|parkway|pkwy|expressway|expy|interstate|i-\d|freeway|fwy|turnpike|tpke|us route|us-\d|state road|sr-?\d|county road|cr-?\d)\b/i;
+
+function analyzeStreets(directions) {
+  let totalDist = 0, residentialDist = 0, mainRoadDist = 0;
+  for (const d of directions) {
+    totalDist += d.distance;
+    if (MAIN_ROAD_RE.test(d.street)) mainRoadDist += d.distance;
+    else residentialDist += d.distance;
+  }
+  return {
+    totalDist, residentialDist, mainRoadDist,
+    residentialPct: totalDist > 0 ? Math.round((residentialDist / totalDist) * 100) : 100,
+    mainRoadPct: totalDist > 0 ? Math.round((mainRoadDist / totalDist) * 100) : 0
+  };
+}
+
+function isOutAndBack(coords) {
+  if (coords.length < 20) return false;
+  const mid = Math.floor(coords.length / 2);
+  const first = coords.slice(0, mid), second = coords.slice(mid).reverse();
+  const check = Math.min(first.length, second.length, 10);
+  let matches = 0;
+  for (let i = 0; i < check; i++) {
+    const fi = Math.floor(i * first.length / check), si = Math.floor(i * second.length / check);
+    if (fi < first.length && si < second.length && haversine(first[fi][0], first[fi][1], second[si][0], second[si][1]) < 0.02) matches++;
+  }
+  return (matches / check) > 0.5;
+}
+
+function scoreRoute(route, greenSpaces, recentHashes) {
+  let score = 0; const breakdown = {};
+  const coords = route.coordinates;
+  const closureDist = haversine(coords[0][0], coords[0][1], coords[coords.length-1][0], coords[coords.length-1][1]);
+  breakdown.closure = closureDist <= 0.005 ? 15 : closureDist <= 0.02 ? 12 : closureDist <= 0.05 ? 5 : 0;
+  score += breakdown.closure;
+  const d = route.distance;
+  breakdown.distance = (d >= 1.35 && d <= 1.65) ? 25 : (d >= 1.2 && d <= 1.8) ? 18 : (d >= 1.0 && d <= 2.0) ? 10 : 3;
+  score += breakdown.distance;
+  const sa = analyzeStreets(route.directions || []);
+  breakdown.streets = sa.residentialPct >= 90 ? 25 : sa.residentialPct >= 75 ? 20 : sa.residentialPct >= 60 ? 12 : 5;
+  score += breakdown.streets;
+  route.streetAnalysis = sa;
+  let greenScore = 10;
+  if (greenSpaces?.length) {
+    let nearCount = 0;
+    for (const gs of greenSpaces) { if (coords.some(c => haversine(c[0], c[1], gs.lat, gs.lon) < 0.08)) nearCount++; if (nearCount >= 2) break; }
+    greenScore = nearCount >= 2 ? 20 : nearCount === 1 ? 12 : 3;
+  }
+  breakdown.greenSpace = greenScore; score += greenScore;
+  if (!recentHashes?.length) { breakdown.uniqueness = 15; }
+  else { const maxSim = Math.max(...recentHashes.map(h => routeSimilarity(route.hash, h))); breakdown.uniqueness = maxSim < 0.2 ? 15 : maxSim < 0.35 ? 10 : maxSim < 0.5 ? 5 : 0; }
+  score += breakdown.uniqueness;
+  if (isOutAndBack(coords)) { breakdown.outAndBackPenalty = -15; score = Math.max(0, score - 15); }
+  return { score, breakdown };
+}
+
+let routeLoadingState = 'idle';
+let routeLoadingMsg = '';
+
+async function generateSingleOSRMRoute(home, rng, recentHashes, greenSpaces) {
+  const patternIdx = Math.floor(rng() * PATTERN_KEYS.length);
+  let bestRoute = null, bestScore = -1;
+  for (let attempt = 0; attempt < 12; attempt++) {
+    const pKey = PATTERN_KEYS[(patternIdx + attempt) % PATTERN_KEYS.length];
+    const waypoints = LOOP_PATTERNS[pKey].generate(home, rng, attempt);
+    const greenWPs = pickGreenSpaceWaypoints(waypoints, greenSpaces || [], rng);
+    const allWPs = [...waypoints];
+    for (const gw of greenWPs) allWPs.splice(Math.floor(allWPs.length / 2), 0, gw);
+    const coordSeq = [{ lat: home.lat, lon: home.lon }, ...allWPs, { lat: home.lat, lon: home.lon }];
+    try {
+      const osrm = await fetchWalkingRoute(coordSeq);
+      if (!osrm) continue;
+      const distMi = osrm.distance * 0.000621371;
+      if (distMi < 0.9 || distMi > 2.4) continue;
+      const coordinates = osrm.geometry.coordinates.map(c => [c[1], c[0]]);
+      if (haversine(coordinates[0][0], coordinates[0][1], coordinates[coordinates.length-1][0], coordinates[coordinates.length-1][1]) > 0.02) continue;
+      if (isOutAndBack(coordinates)) continue;
+      const directions = extractDirections(osrm, home.address);
+      const hash = hashRouteCoords(coordinates);
+      const candidate = { distance: Math.round(distMi * 100) / 100, duration: Math.round(osrm.duration / 60), coordinates, directions, hash, pattern: pKey, greenSpots: greenWPs.map(g => ({ lat: g.lat, lon: g.lon, name: g.name, type: g.type })) };
+      const { score, breakdown } = scoreRoute(candidate, greenSpaces, recentHashes);
+      candidate.score = score; candidate.scoreBreakdown = breakdown;
+      const threshold = attempt < 4 ? 45 : (attempt < 8 ? 35 : 25);
+      if (score >= threshold && score > bestScore) { bestRoute = candidate; bestScore = score; }
+      if (bestScore >= 65) break;
+    } catch(e) {
+      console.warn('OSRM attempt', attempt, 'failed:', e.message);
+      if (attempt < 11) await new Promise(r => setTimeout(r, 300));
+    }
+  }
+  return bestRoute;
+}
+
+function getRegenCounter() { try { return parseInt(localStorage.getItem('wc_regen_ctr')||'0',10); } catch(e) { return 0; } }
+function bumpRegenCounter() { const c=getRegenCounter()+1; try { localStorage.setItem('wc_regen_ctr',String(c)); } catch(e){} return c; }
+
+async function generateDailyRoutes(dateKey) {
+  const home = getHomeLocation(), ctr = getRegenCounter(), recent = getRecentRouteHashes(7);
+  let greenSpaces = []; try { greenSpaces = await loadGreenSpaces(); } catch(e) {}
+  const amRng = rngCreate(rngHash(`${dateKey}-am-${ctr}-${home.lat.toFixed(4)}`));
+  const pmRng = rngCreate(rngHash(`${dateKey}-pm-${ctr}-${home.lat.toFixed(4)}`));
+  routeLoadingMsg = 'Scouting morning neighborhood loop...'; render();
+  const amRaw = await generateSingleOSRMRoute(home, amRng, recent, greenSpaces);
+  const am = amRaw ? { ...amRaw, id:`route-am-${dateKey}-${ctr}`, slot:'am' } : null;
+  routeLoadingMsg = 'Mapping evening walk route...'; render();
+  const pmRaw = await generateSingleOSRMRoute(home, pmRng, [...recent, am?.hash].filter(Boolean), greenSpaces);
+  const pm = pmRaw ? { ...pmRaw, id:`route-pm-${dateKey}-${ctr}`, slot:'pm' } : null;
+  const result = { date:dateKey, am, pm }; saveRouteHistory(dateKey, result); return result;
+}
+
+function loadRouteHistory() { try { return JSON.parse(localStorage.getItem('wc_routes')||'{}'); } catch(e) { return {}; } }
+function saveRouteHistory(dateKey, routes) {
+  const h=loadRouteHistory(); h[dateKey]=routes;
+  const cutoff=new Date(); cutoff.setDate(cutoff.getDate()-14);
+  Object.keys(h).forEach(k=>{ if(new Date(k+'T12:00:00')<cutoff) delete h[k]; });
+  try { localStorage.setItem('wc_routes',JSON.stringify(h)); } catch(e){}
+}
+function getRecentRouteHashes(days) {
+  const h=loadRouteHistory(), hashes=[], cutoff=new Date(); cutoff.setDate(cutoff.getDate()-days);
+  Object.entries(h).forEach(([k,v])=>{ if(new Date(k+'T12:00:00')>=cutoff) { if(v.am?.hash) hashes.push(v.am.hash); if(v.pm?.hash) hashes.push(v.pm.hash); } });
+  return hashes;
+}
+function getTodayRoutes() { const cached=loadRouteHistory()[getTodayKey()]; return (cached && (cached.am || cached.pm)) ? cached : null; }
+
+async function loadTodayRoutes() {
+  if (routeLoadingState === 'loading') return;
+  const existing = getTodayRoutes();
+  if (existing) { routeLoadingState = 'loaded'; render(); return; }
+  routeLoadingState = 'loading'; routeLoadingMsg = 'Finding neighborhood loops near you...'; render();
+  try { await generateDailyRoutes(getTodayKey()); routeLoadingState = 'loaded'; }
+  catch(e) { console.error('Route gen failed:', e); routeLoadingState = 'error'; routeLoadingMsg = e.message || 'Route generation failed'; }
+  render();
+}
+
+async function regenerateRoutes() {
+  bumpRegenCounter();
+  const h=loadRouteHistory(); delete h[getTodayKey()];
+  try { localStorage.setItem('wc_routes',JSON.stringify(h)); } catch(e){}
+  state.routeDetail=null; routeLoadingState='idle';
+  showToast('Generating new routes...'); loadTodayRoutes();
+}
+
+// ============================================================
+// ===== LEAFLET MAP HELPERS =====
+// ============================================================
+let routeMapInstances = {};
+
+function initRouteMap(containerId, route, fitPad) {
+  if(routeMapInstances[containerId]) { try{routeMapInstances[containerId].remove();}catch(e){} delete routeMapInstances[containerId]; }
+  const el=document.getElementById(containerId);
+  if(!el || !route?.coordinates?.length) return null;
+  const map=L.map(el, { zoomControl:false, attributionControl:false });
+  L.control.zoom({ position:'topright' }).addTo(map);
+  L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', { maxZoom:19 }).addTo(map);
+  const coords=route.coordinates;
+  L.polyline(coords, { color:'#e67e22', weight:5, opacity:0.3 }).addTo(map);
+  L.polyline(coords, { color:'#f39c12', weight:3, opacity:0.9 }).addTo(map);
+  const home=getHomeLocation();
+  const homeIcon=L.divIcon({ className:'', html:'<div style="font-size:22px;filter:drop-shadow(0 1px 3px rgba(0,0,0,0.8))">🏠</div>', iconSize:[28,28], iconAnchor:[14,14] });
+  L.marker(coords[0], { icon:homeIcon }).addTo(map).bindPopup('🏠 '+home.address);
+  let maxD=0, fIdx=0;
+  coords.forEach((c,i)=>{ const d=Math.sqrt((c[0]-coords[0][0])**2+(c[1]-coords[0][1])**2); if(d>maxD){maxD=d;fIdx=i;} });
+  if(fIdx>0) {
+    const wpIcon=L.divIcon({ className:'', html:'<div style="width:10px;height:10px;background:#9b59b6;border:2px solid white;border-radius:50%;box-shadow:0 1px 4px rgba(0,0,0,0.5)"></div>', iconSize:[14,14], iconAnchor:[7,7] });
+    L.marker(coords[fIdx], { icon:wpIcon }).addTo(map);
+  }
+  if(route.greenSpots?.length) {
+    for(const gs of route.greenSpots) {
+      const gsIcon=L.divIcon({ className:'', html:'<div style="font-size:16px;filter:drop-shadow(0 1px 2px rgba(0,0,0,0.6))">🌿</div>', iconSize:[20,20], iconAnchor:[10,10] });
+      L.marker([gs.lat, gs.lon], { icon:gsIcon }).addTo(map).bindPopup(`🌿 ${gs.name||'Green space'}`);
+    }
+  }
+  map.fitBounds(L.latLngBounds(coords), { padding:fitPad||[20,20] });
+  routeMapInstances[containerId]=map;
+  return map;
+}
+
+function postRenderMaps() {
+  const routes=getTodayRoutes(); if(!routes) return;
+  if(state.view==='routes' && !state.routeDetail) {
+    if(routes.am) setTimeout(()=>initRouteMap('map-am',routes.am,[15,15]),80);
+    if(routes.pm) setTimeout(()=>initRouteMap('map-pm',routes.pm,[15,15]),80);
+  }
+  if(state.view==='routes' && state.routeDetail) {
+    const r=routes[state.routeDetail];
+    if(r) setTimeout(()=>initRouteMap('map-detail',r,[25,25]),80);
+  }
+}
+
+// ============================================================
+// ===== NAVIGATION SYSTEM =====
+// ============================================================
+function startNavigation(slot) {
+  const routes=getTodayRoutes(); if(!routes) { showToast('No routes loaded'); return; }
+  const route=routes[slot]; if(!route) { showToast('No route found'); return; }
+  state.navActive=true; state.navRoute=route; state.navStep=0; state.navUserPos=null;
+  renderNavOverlay(); startGPS();
+  if(state.navVoice && route.directions[0]) speak(route.directions[0].instruction);
+}
+
+function stopNavigation() {
+  state.navActive=false;
+  if(state.navWatchId!==null) { navigator.geolocation.clearWatch(state.navWatchId); state.navWatchId=null; }
+  if(state.navMap) { try{state.navMap.remove();}catch(e){} state.navMap=null; }
+  state.navMarker=null; state.navLine=null; state.navRoute=null;
+  document.getElementById('navOverlay').style.display='none';
+  if(window.speechSynthesis) speechSynthesis.cancel();
+  render();
+}
+
+function speak(text) {
+  if(!state.navVoice || !window.speechSynthesis) return;
+  speechSynthesis.cancel();
+  const u=new SpeechSynthesisUtterance(text); u.rate=0.95; u.pitch=1; u.volume=1;
+  speechSynthesis.speak(u);
+}
+
+function toggleNavVoice() { state.navVoice=!state.navVoice; if(!state.navVoice && window.speechSynthesis) speechSynthesis.cancel(); renderNavPanel(); }
+
+function startGPS() {
+  if(!navigator.geolocation) { updateGPSStatus('GPS not available','error'); return; }
+  updateGPSStatus('Acquiring GPS...','');
+  state.navWatchId=navigator.geolocation.watchPosition(
+    pos => { state.navUserPos=[pos.coords.latitude, pos.coords.longitude]; updateGPSStatus('GPS tracking active','tracking'); updateNavPosition(); },
+    err => { updateGPSStatus('GPS error: '+err.message,'error'); },
+    { enableHighAccuracy:true, maximumAge:5000, timeout:15000 }
+  );
+}
+
+function updateGPSStatus(msg, cls) { const el=document.getElementById('gps-status'); if(el) { el.textContent=msg; el.className='nav-gps-status'+(cls?' '+cls:''); } }
+
+function updateNavPosition() {
+  if(!state.navActive||!state.navRoute||!state.navUserPos) return;
+  if(state.navMap && state.navMarker) state.navMarker.setLatLng(state.navUserPos);
+  const coords=state.navRoute.coordinates, dirs=state.navRoute.directions;
+  let closestIdx=0, closestDist=Infinity;
+  coords.forEach((c,i)=>{ const d=haversine(state.navUserPos[0],state.navUserPos[1],c[0],c[1]); if(d<closestDist){closestDist=d;closestIdx=i;} });
+  let totalRouteDist=0; dirs.forEach(d=>totalRouteDist+=d.distance||0);
+  let accumCoordIdx=0;
+  for(let s=0; s<dirs.length-1; s++) {
+    const stepCoords=Math.max(1,Math.round(((dirs[s].distance||0)/Math.max(totalRouteDist,0.01))*coords.length));
+    accumCoordIdx+=stepCoords;
+    if(closestIdx < accumCoordIdx && s > state.navStep) { state.navStep=s; renderNavPanel(); if(state.navVoice && dirs[s]) speak(dirs[s].instruction); break; }
+  }
+  let remaining=0; for(let i=state.navStep;i<dirs.length;i++) remaining+=dirs[i].distance||0;
+  const remEl=document.getElementById('nav-remaining'); if(remEl) remEl.textContent=remaining.toFixed(2)+' mi remaining';
+}
+
+async function takeMeHome() {
+  if(!state.navActive||!state.navUserPos) { showToast('Need GPS fix first'); return; }
+  const home=getHomeLocation();
+  if(haversine(state.navUserPos[0],state.navUserPos[1],home.lat,home.lon)<0.02) { speak("You're already home!"); showToast("You're near home! 🏠"); return; }
+  showToast('Finding fastest route home...');
+  try {
+    const osrm = await fetchWalkingRoute([{ lat:state.navUserPos[0], lon:state.navUserPos[1] }, { lat:home.lat, lon:home.lon }]);
+    if(!osrm) { showToast('Cannot find route home'); return; }
+    const coordinates=osrm.geometry.coordinates.map(c=>[c[1],c[0]]);
+    const directions=extractDirections(osrm, home.address);
+    state.navRoute={ id:'route-home-now', slot:'home', pattern:'wide_circle', distance:Math.round(osrm.distance*0.000621371*100)/100, duration:Math.round(osrm.duration/60), directions, coordinates, hash:hashRouteCoords(coordinates) };
+    state.navStep=0; speak("Rerouting home. "+directions[0].instruction); showToast('Heading home! 🏠'); renderNavOverlay();
+  } catch(e) { showToast('Route home failed: '+e.message); }
+}
+
+function renderNavOverlay() {
+  if(!state.navActive) return;
+  const overlay=document.getElementById('navOverlay');
+  overlay.style.display='flex'; overlay.className='nav-overlay';
+  overlay.innerHTML=`<div id="nav-map-container" class="nav-map"></div><div class="nav-panel" id="nav-panel"></div>`;
+  renderNavPanel();
+  setTimeout(()=>{
+    const route=state.navRoute; if(!route) return;
+    const el=document.getElementById('nav-map-container'); if(!el) return;
+    state.navMap=L.map(el, { zoomControl:false, attributionControl:false });
+    L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', { maxZoom:19 }).addTo(state.navMap);
+    const coords=route.coordinates;
+    state.navLine=L.polyline(coords,{color:'#f39c12',weight:4,opacity:0.9}).addTo(state.navMap);
+    L.polyline(coords,{color:'#e67e22',weight:6,opacity:0.3}).addTo(state.navMap);
+    const homeIcon=L.divIcon({className:'',html:'<div style="font-size:20px;filter:drop-shadow(0 1px 3px rgba(0,0,0,0.8))">🏠</div>',iconSize:[24,24],iconAnchor:[12,12]});
+    L.marker(coords[0],{icon:homeIcon}).addTo(state.navMap);
+    const userIcon=L.divIcon({className:'',html:'<div style="width:14px;height:14px;background:#3498db;border:3px solid white;border-radius:50%;box-shadow:0 0 8px rgba(52,152,219,0.6)"></div>',iconSize:[20,20],iconAnchor:[10,10]});
+    state.navMarker=L.marker(state.navUserPos||coords[0],{icon:userIcon}).addTo(state.navMap);
+    state.navMap.fitBounds(L.latLngBounds(coords),{padding:[40,40]});
+  },100);
+}
+
+function renderNavPanel() {
+  const panel=document.getElementById('nav-panel'); if(!panel||!state.navRoute) return;
+  const dirs=state.navRoute.directions, cur=dirs[state.navStep], next=dirs[state.navStep+1];
+  let remaining=0; for(let i=state.navStep;i<dirs.length;i++) remaining+=dirs[i].distance||0;
+  panel.innerHTML=`
+    <div class="nav-step-active"><div class="instruction">${cur?cur.instruction:'Route complete!'}</div>
+    <div class="meta">${cur?.distance?'📏 '+cur.distance+' mi':''}&nbsp;&nbsp;<span id="nav-remaining">${remaining.toFixed(2)} mi remaining</span></div></div>
+    ${next?`<div class="nav-upcoming"><div class="upcoming-label">Then</div>${next.instruction} (${next.distance} mi)</div>`:''}
+    <div class="nav-controls">
+      <button class="nav-btn nav-btn-home" onclick="takeMeHome()">🏠 Take Me Home</button>
+      <button class="nav-btn nav-btn-voice ${state.navVoice?'active':''}" onclick="toggleNavVoice()">${state.navVoice?'🔊 On':'🔇 Off'}</button>
+      <button class="nav-btn nav-btn-stop" onclick="stopNavigation()">✖ End</button>
+    </div>
+    <div id="gps-status" class="nav-gps-status">Waiting for GPS...</div>`;
+}
+
+// ============================================================
+// ===== TASK EDITOR MODAL =====
+// ============================================================
+const TASK_ICONS = ['🚶','🐾','🍖','🥩','🌅','🌙','✂️','🪮','🛁','💊','⛲','🎾','🦴','💧','🧹','🏥','📦','🧴','🎀','⭐'];
+
+function openTaskEditor(taskId) {
+  state.editingTask = taskId;
+  renderTaskModal();
+}
+
+function closeTaskEditor() {
+  state.editingTask = null;
+  document.getElementById('taskModal').innerHTML = '';
+}
+
+function renderTaskModal() {
+  const modal = document.getElementById('taskModal');
+  const isNew = state.editingTask === null || state.editingTask === 'new';
+  const task = isNew ? {
+    id: generateTaskId(), name: '', type: 'daily', time: '09:00', timeMinutes: 540,
+    recurrence: 'daily', priority: 3, reminder: 30, icon: '🐾',
+    description: '', cost: '', nextDue: getTodayKey(), deadline: null
+  } : getTask(state.editingTask);
+
+  if (!task) { closeTaskEditor(); return; }
+
+  const priorityOpts = [1,2,3,4].map(p => `<div class="priority-opt ${task.priority===p?'sel':''}" data-p="${p}" onclick="document.querySelectorAll('.priority-opt').forEach(o=>o.classList.remove('sel'));this.classList.add('sel');">P${p}</div>`).join('');
+
+  const iconOpts = TASK_ICONS.map(ic => `<div class="icon-opt ${task.icon===ic?'sel':''}" onclick="document.querySelectorAll('.icon-opt').forEach(o=>o.classList.remove('sel'));this.classList.add('sel');" data-icon="${ic}">${ic}</div>`).join('');
+
+  modal.innerHTML = `<div class="modal-overlay" onclick="if(event.target===this)closeTaskEditor()">
+    <div class="modal-sheet">
+      <div class="modal-handle"></div>
+      <div class="modal-title">${isNew ? 'New Task' : 'Edit Task'}</div>
+
+      <div class="form-group">
+        <label class="form-label">Task Name</label>
+        <input class="form-input" id="ed-name" value="${task.name.replace(/"/g,'&quot;')}" placeholder="e.g. Morning walk">
+      </div>
+
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">Type</label>
+          <select class="form-select" id="ed-type" onchange="document.getElementById('ed-weekly-fields').style.display=this.value==='weekly'?'block':'none';document.getElementById('ed-daily-fields').style.display=this.value==='daily'?'block':'none';">
+            <option value="daily" ${task.type==='daily'?'selected':''}>Daily</option>
+            <option value="weekly" ${task.type==='weekly'?'selected':''}>Weekly / Recurring</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Recurrence</label>
+          <select class="form-select" id="ed-recurrence" onchange="document.getElementById('ed-custom-repeat').style.display=this.value==='custom'?'block':'none';">
+            <option value="daily" ${task.recurrence==='daily'?'selected':''}>Every day</option>
+            <option value="weekly" ${task.recurrence==='weekly'?'selected':''}>Every week</option>
+            <option value="biweekly" ${task.recurrence==='biweekly'?'selected':''}>Every 2 weeks</option>
+            <option value="monthly" ${task.recurrence==='monthly'?'selected':''}>Every month</option>
+            <option value="custom" ${task.recurrence==='custom'?'selected':''}>Custom...</option>
+          </select>
+        </div>
+      </div>
+
+      <div id="ed-custom-repeat" style="display:${task.recurrence==='custom'?'block':'none'};background:var(--card);border-radius:10px;padding:12px;margin-bottom:12px">
+        <div style="font-size:13px;font-weight:600;margin-bottom:10px;color:var(--accent-light)">Custom Repeat</div>
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label">Every</label>
+            <input class="form-input" type="number" id="ed-repeat-val" min="1" max="365" value="${task.repeat_interval_value||1}" style="width:70px">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Unit</label>
+            <select class="form-select" id="ed-repeat-unit">
+              <option value="day" ${task.repeat_interval_unit==='day'?'selected':''}>Day(s)</option>
+              <option value="week" ${task.repeat_interval_unit==='week'?'selected':''}>Week(s)</option>
+              <option value="month" ${task.repeat_interval_unit==='month'||!task.repeat_interval_unit?'selected':''}>Month(s)</option>
+              <option value="year" ${task.repeat_interval_unit==='year'?'selected':''}>Year(s)</option>
+            </select>
+          </div>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Repeat based on</label>
+          <select class="form-select" id="ed-repeat-basis">
+            <option value="scheduled" ${task.repeat_basis!=='completed'?'selected':''}>Scheduled date (fixed cadence)</option>
+            <option value="completed" ${task.repeat_basis==='completed'?'selected':''}>Completed date (shifts when done)</option>
+          </select>
+          <div style="font-size:11px;color:var(--text-muted);margin-top:4px">
+            Scheduled = same interval regardless of when you complete.<br>
+            Completed = next due date starts from when you mark it done.
+          </div>
+        </div>
+        <div class="form-group">
+          <label class="form-label">End date (optional)</label>
+          <input class="form-input" type="date" id="ed-repeat-end" value="${task.repeat_end_date||''}">
+          <div style="font-size:11px;color:var(--text-muted);margin-top:4px">Leave blank for never-ending recurrence</div>
+        </div>
+      </div>
+
+      <div id="ed-daily-fields" style="display:${task.type==='daily'?'block':'none'}">
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label">Time</label>
+            <input class="form-input" type="time" id="ed-time" value="${task.time||'09:00'}">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Reminder (min before)</label>
+            <select class="form-select" id="ed-reminder">
+              <option value="" ${!task.reminder?'selected':''}>None</option>
+              <option value="15" ${task.reminder===15?'selected':''}>15 min</option>
+              <option value="30" ${task.reminder===30?'selected':''}>30 min</option>
+              <option value="60" ${task.reminder===60?'selected':''}>1 hour</option>
+            </select>
+          </div>
+        </div>
+      </div>
+
+      <div id="ed-weekly-fields" style="display:${task.type==='weekly'?'block':'none'}">
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label">Next Due Date</label>
+            <input class="form-input" type="date" id="ed-nextdue" value="${task.nextDue||getTodayKey()}">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Deadline</label>
+            <input class="form-input" type="date" id="ed-deadline" value="${task.deadline||''}">
+          </div>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Cost</label>
+          <input class="form-input" id="ed-cost" value="${task.cost||''}" placeholder="e.g. $25">
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">Priority</label>
+        <div class="priority-picker">${priorityOpts}</div>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">Icon</label>
+        <div class="icon-picker">${iconOpts}</div>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">Description</label>
+        <input class="form-input" id="ed-desc" value="${(task.description||'').replace(/"/g,'&quot;')}" placeholder="Optional notes">
+      </div>
+
+      <div class="modal-actions">
+        <button class="btn-save" onclick="saveTaskFromEditor('${task.id}', ${isNew})">Save</button>
+        <button class="btn-cancel" onclick="closeTaskEditor()">Cancel</button>
+      </div>
+      ${!isNew ? `<div class="modal-actions" style="margin-top:8px"><button class="btn-delete" onclick="if(confirm('Delete this task?')){deleteTask('${task.id}');closeTaskEditor();render();}">Delete Task</button></div>` : ''}
+    </div>
+  </div>`;
+}
+
+function saveTaskFromEditor(taskId, isNew) {
+  const name = document.getElementById('ed-name').value.trim();
+  if (!name) { showToast('Task name is required'); return; }
+
+  const type = document.getElementById('ed-type').value;
+  const recurrence = document.getElementById('ed-recurrence').value;
+  const time = document.getElementById('ed-time').value || null;
+  const reminder = document.getElementById('ed-reminder').value ? parseInt(document.getElementById('ed-reminder').value) : null;
+  const nextDue = document.getElementById('ed-nextdue').value || null;
+  const deadline = document.getElementById('ed-deadline').value || null;
+  const cost = document.getElementById('ed-cost').value.trim() || '';
+  const desc = document.getElementById('ed-desc').value.trim() || '';
+  const priority = parseInt(document.querySelector('.priority-opt.sel')?.dataset.p || '3');
+  const icon = document.querySelector('.icon-opt.sel')?.dataset.icon || '🐾';
+
+  // Custom recurrence fields
+  const repeatVal = document.getElementById('ed-repeat-val')?.value || 1;
+  const repeatUnit = document.getElementById('ed-repeat-unit')?.value || 'day';
+  const repeatBasis = document.getElementById('ed-repeat-basis')?.value || 'scheduled';
+  const repeatEnd = document.getElementById('ed-repeat-end')?.value || null;
+
+  // Preserve existing last_completed_date if editing
+  const existingTask = getTask(taskId);
+  const lastCompleted = existingTask?.last_completed_date || null;
+
+  const task = {
+    id: taskId, name, type, time: type === 'daily' ? time : null,
+    timeMinutes: type === 'daily' ? parseTimeToMinutes(time) : null,
+    recurrence, priority, reminder: type === 'daily' ? reminder : null,
+    icon, description: desc, cost,
+    nextDue: type === 'weekly' ? nextDue : null,
+    deadline: type === 'weekly' ? deadline : null,
+    // v8: Advanced recurrence
+    repeat_interval_value: recurrence === 'custom' ? parseInt(repeatVal) : null,
+    repeat_interval_unit: recurrence === 'custom' ? repeatUnit : null,
+    repeat_basis: recurrence === 'custom' ? repeatBasis : null,
+    repeat_end_date: recurrence === 'custom' ? repeatEnd : null,
+    last_completed_date: lastCompleted
+  };
+
+  saveTask(task);
+  closeTaskEditor();
+  showToast(isNew ? 'Task created!' : 'Task updated!');
+  render();
+}
+
+// ============================================================
+// ===== ROUTE VIEWS =====
+// ============================================================
+function viewRoutes() {
+  if(state.routeDetail) return viewRouteDetail(state.routeDetail);
+  const routes=getTodayRoutes();
+  const now=getNow(), dateStr=now.toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric'});
+  const home=getHomeLocation();
+  if(!routes) {
+    if(routeLoadingState !== 'loading') loadTodayRoutes();
+    return `<div class="main-header"><h2>🗺️ Walking Routes</h2><div class="subtitle">${dateStr}</div></div>
+    <div class="route-loading">${routeLoadingState==='error'
+      ? `<div style="font-size:32px;margin-bottom:12px">⚠️</div><div style="font-size:14px;color:var(--text-dim);margin-bottom:12px">${routeLoadingMsg||'Failed to generate routes'}</div><button class="btn-primary" style="max-width:200px;margin:0 auto" onclick="routeLoadingState='idle';loadTodayRoutes()">Retry</button>`
+      : `<div class="spinner"></div><div style="font-size:14px;color:var(--text-dim)">${routeLoadingMsg||'Finding walkable routes...'}</div><div style="font-size:11px;color:var(--text-muted);margin-top:8px">Using real sidewalks & paths near ${home.address.split(',')[0]}</div>`
+    }</div>`;
+  }
+  return `<div class="main-header"><h2>🗺️ Walking Routes</h2><div class="subtitle">${dateStr}</div>
+    <div class="streak">🐕 ${(routes.am?1:0)+(routes.pm?1:0)} walkable route${(routes.am?1:0)+(routes.pm?1:0)!==1?'s':''} generated</div></div>
+  ${routes.am ? routeCard(routes.am,'🌅 Morning Walk','9:00 AM — Long morning walk') : '<div class="task-item"><div class="task-content"><div class="task-name">Could not generate AM route — try regenerating</div></div></div>'}
+  ${routes.pm ? routeCard(routes.pm,'🌆 Evening Walk','5:30 PM — Long pre-dinner walk') : '<div class="task-item"><div class="task-content"><div class="task-name">Could not generate PM route — try regenerating</div></div></div>'}
+  <div class="route-actions"><button class="route-btn route-btn-secondary" onclick="regenerateRoutes()">🔄 Generate New Routes</button></div>
+  <div style="margin-top:12px;padding:10px 14px;background:var(--card);border-radius:10px;">
+    <div class="walkability-badge">✅ Real walking paths via OpenStreetMap</div>
+    <div style="font-size:11px;color:var(--text-muted);margin-top:4px">Loop routes scored on distance, residential streets, green spaces & variety near ${home.address.split(',')[0]}</div>
+  </div>`;
+}
+
+function routeCard(route, title, linked) {
+  const pat = LOOP_PATTERNS[route.pattern] || LOOP_PATTERNS.wide_circle;
+  const mapId='map-'+route.slot;
+  return `<div class="route-card" onclick="state.routeDetail='${route.slot}';render();">
+    <div class="route-card-header"><div class="route-slot">${title}</div>
+    <span class="route-type-badge badge-${route.pattern||'wide_circle'}">${pat.icon} ${(route.pattern||'loop').replace('_',' ')}</span></div>
+    <div style="font-size:12px;color:var(--text-muted);margin-bottom:8px">${linked}</div>
+    <div id="${mapId}" class="route-map"></div>
+    <div class="route-stats">
+      <div class="route-stat">📏 <strong>${route.distance} mi</strong></div>
+      <div class="route-stat">⏱️ <strong>~${route.duration} min</strong></div>
+      <div class="route-stat">🔀 <strong>${(route.directions||[]).length-1} turns</strong></div>
+      ${route.score!=null?`<div class="route-stat">⭐ <strong>${route.score}</strong>/100</div>`:''}
+    </div>
+    ${route.greenSpots?.length?`<div style="margin-top:4px">${route.greenSpots.map(g=>`<span class="green-badge">🌿 ${g.name}</span>`).join('')}</div>`:''}
+    <div style="font-size:12px;color:var(--text-dim);margin-top:4px">${pat.desc} — tap for directions</div>
+  </div>`;
+}
+
+function viewRouteDetail(slot) {
+  const routes=getTodayRoutes(); if(!routes) { state.routeDetail=null; return viewRoutes(); }
+  const route=routes[slot]; if(!route) { state.routeDetail=null; return viewRoutes(); }
+  const pat = LOOP_PATTERNS[route.pattern] || LOOP_PATTERNS.wide_circle;
+  const title=slot==='am'?'🌅 Morning Route':'🌆 Evening Route';
+  const sa = route.streetAnalysis || {};
+  const scoreColor = (route.score||0) >= 60 ? 'var(--green)' : (route.score||0) >= 40 ? 'var(--accent)' : 'var(--red)';
+  const bd = route.scoreBreakdown || {};
+
+  return `<button class="route-back" onclick="state.routeDetail=null;render();">← Back to routes</button>
+  <div class="main-header"><h2>${title}</h2>
+    <div class="subtitle"><span class="route-type-badge badge-${route.pattern||'wide_circle'}" style="margin-right:8px">${pat.icon} ${(route.pattern||'loop').replace('_',' ')}</span>${pat.desc}</div></div>
+  <div id="map-detail" class="route-map route-map-detail"></div>
+  <div class="route-stats" style="margin-bottom:16px;padding:12px;background:var(--card);border-radius:10px;">
+    <div class="route-stat">📏 <strong>${route.distance} mi</strong></div>
+    <div class="route-stat">⏱️ <strong>~${route.duration} min</strong></div>
+    <div class="route-stat">🔀 <strong>${(route.directions||[]).length-1} turns</strong></div>
+    ${route.score!=null?`<div class="route-stat">⭐ <strong>${route.score}</strong>/100</div>`:''}
+  </div>
+  ${route.score!=null?`<div style="padding:12px;background:var(--card);border-radius:10px;margin-bottom:16px;">
+    <div style="font-size:13px;font-weight:600;margin-bottom:8px">Route Quality Score</div>
+    <div class="score-bar"><div class="score-fill" style="width:${route.score}%;background:${scoreColor}"></div></div>
+    <div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:8px;font-size:11px;color:var(--text-dim)">
+      <span>Loop: ${bd.closure||0}/15</span><span>Distance: ${bd.distance||0}/25</span><span>Streets: ${bd.streets||0}/25</span><span>Green: ${bd.greenSpace||0}/20</span><span>Unique: ${bd.uniqueness||0}/15</span>
+    </div></div>`:''}
+  ${sa.residentialPct!=null?`<div style="padding:12px;background:var(--card);border-radius:10px;margin-bottom:16px;">
+    <div style="font-size:13px;font-weight:600;margin-bottom:6px">Street Breakdown</div>
+    <div style="font-size:12px;color:var(--text-dim)">🏘️ Residential: ${sa.residentialPct}% &nbsp;|&nbsp; 🛣️ Main road: ${sa.mainRoadPct}%</div>
+    <div class="score-bar" style="margin-top:6px"><div class="score-fill" style="width:${sa.residentialPct}%;background:var(--green)"></div></div></div>`:''}
+  ${route.greenSpots?.length?`<div style="padding:12px;background:var(--card);border-radius:10px;margin-bottom:16px;">
+    <div style="font-size:13px;font-weight:600;margin-bottom:6px">Green Spaces Along Route</div>
+    ${route.greenSpots.map(g=>`<span class="green-badge">🌿 ${g.name}</span>`).join('')}</div>`:''}
+  <div class="route-actions" style="margin-bottom:16px;"><button class="route-btn route-btn-primary" onclick="event.stopPropagation();startNavigation('${slot}')">▶ Start Walk</button></div>
+  <div class="section"><div class="section-header"><h3>📍 Turn-by-Turn Directions</h3></div>
+    <ol class="route-directions">${(route.directions||[]).map((d,i)=>`<li class="route-step"><span class="step-num">${i+1}</span><span class="step-text">${d.instruction}</span>${d.distance?`<span class="step-dist">${d.distance} mi</span>`:''}</li>`).join('')}</ol>
+  </div>
+  <div class="route-actions">
+    <button class="route-btn route-btn-primary" onclick="event.stopPropagation();startNavigation('${slot}')">▶ Start Walk</button>
+    <button class="route-btn route-btn-secondary" onclick="state.routeDetail=null;render();">Back</button>
+  </div>`;
+}
+
+// ===== SERVICE WORKER =====
+if('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('./sw.js').then(() => {
+    // v7: Re-subscribe to push if previously active (keeps subscription fresh)
+    if (localStorage.getItem('wc_push_active') === 'true' && Notification.permission === 'granted') {
+      subscribeToPush();
+    }
+  }).catch(()=>{});
+}
+
+// ============================================================
+// ===== RENDER =====
+// ============================================================
+function render() {
+  const s=getStats(), now=getNow();
+  const dateStr=now.toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric'});
+  const timeStr=now.toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'});
+  const cm=getCurrentMinutes();
+
+  // Show/hide FAB
+  const fab = document.getElementById('fab');
+  if (fab) fab.style.display = ['today','daily','weekly'].includes(state.view) ? 'flex' : 'none';
+
+  document.getElementById('bottomNav').innerHTML = [
+    ['today','☀️','Today'],['daily','📋','Daily'],['weekly','📆','Weekly'],
+    ['routes','🗺️','Routes'],['timeline','⏱️','Timeline'],['settings','⚙️','Settings']
+  ].map(([v,ic,lb])=>`<div class="tab ${state.view===v?'active':''}" onclick="setView('${v}')"><span class="tab-icon">${ic}</span>${lb}</div>`).join('');
+
+  const sidebarHTML = `<div class="sidebar">
+    <div class="sidebar-header"><div class="dog-avatar">🐕</div><div><h1>Whiteclaw</h1><p>Care Tracker</p></div></div>
+    <div style="margin-bottom:24px">
+      ${['today,☀️,Today','daily,📋,Daily Routine','weekly,📆,Weekly / Regular','routes,🗺️,Walking Routes','timeline,⏱️,Timeline','settings,⚙️,Settings'].map(x=>{
+        const [v,ic,lb]=x.split(',');
+        return `<div class="nav-item ${state.view===v?'active':''}" onclick="setView('${v}')"><span class="icon">${ic}</span>${lb}</div>`;
+      }).join('')}
+    </div>
+    <div class="sidebar-stats">
+      <div style="font-size:13px;font-weight:700;margin-bottom:8px">Today's Progress</div>
+      <div class="stat-row"><span class="label">Completed</span><span class="value">${s.done}/${s.total}</span></div>
+      <div class="stat-row"><span class="label">Daily</span><span class="value">${s.dd}/${s.td}</span></div>
+      <div class="progress-bar"><div class="progress-fill" style="width:${s.pct}%"></div></div>
+      ${s.pct===100?'<div class="streak" style="margin-top:10px">🔥 All done!</div>':''}
+    </div>
+  </div>`;
+
+  Object.keys(routeMapInstances).forEach(k=>{ try{routeMapInstances[k].remove();}catch(e){} delete routeMapInstances[k]; });
+  const mainHTML = renderView(s, dateStr, timeStr, cm);
+  document.getElementById('app').innerHTML = sidebarHTML + `<div class="main">${mainHTML}</div>`;
+  postRenderMaps();
+}
+
+function renderView(s, dateStr, timeStr, cm) {
+  switch(state.view) {
+    case 'today': return viewToday(s,dateStr,timeStr,cm);
+    case 'daily': return viewDaily(cm);
+    case 'weekly': return viewWeekly();
+    case 'timeline': return viewTimeline(cm);
+    case 'routes': return viewRoutes();
+    case 'settings': return viewSettings();
+    default: return viewToday(s,dateStr,timeStr,cm);
+  }
+}
+
+function notifBanner() {
+  if(state.notificationsEnabled && 'Notification' in window && Notification.permission==='granted') return '';
+  if(!('Notification' in window)) {
+    if (isIOS() && !isPWA()) {
+      return `<div class="notif-banner" onclick="showToast('Add this app to your Home Screen first (Share → Add to Home Screen), then enable notifications')">
+        <span class="icon">📲</span>
+        <div class="text"><strong>Add to Home Screen</strong>Required for notifications on iPhone</div>
+        <button class="btn">How</button>
+      </div>`;
+    }
+    return '';
+  }
+  return `<div class="notif-banner" onclick="requestNotifPermission()">
+    <span class="icon">🔔</span>
+    <div class="text"><strong>Enable Reminders</strong>Get notified 30 min before tasks & persistent overdue alerts</div>
+    <button class="btn">Enable</button>
+  </div>`;
+}
+
+function viewToday(s, dateStr, timeStr, cm) {
+  const daily = getDailyTasks();
+  const weekly = getWeeklyTasks();
+  const overdue=weekly.filter(t=>isOverdue(t.nextDue)&&!isWeeklyDone(t.id));
+  const dueW=weekly.filter(t=>isDueToday(t.nextDue)&&!isWeeklyDone(t.id));
+  const past=daily.filter(t=>(t.timeMinutes||0)<=cm), upcoming=daily.filter(t=>(t.timeMinutes||0)>cm);
+
+  return `<div class="main-header">
+    <h2>☀️ Today</h2><div class="subtitle">${dateStr} &bull; ${timeStr}</div>
+    <div class="streak">🐾 ${s.total-s.done?s.total-s.done+' tasks left':'All done! 🔥'}</div>
+  </div>
+  ${notifBanner()}
+  ${overdue.length?`<div class="section"><div class="section-header"><h3>⚠️ Overdue</h3><span class="count">${overdue.length}</span></div>${overdue.map(weeklyItem).join('')}</div>`:''}
+  <div class="section"><div class="section-header"><h3>🐕 Daily Routine</h3><span class="count">${s.dd}/${s.td}</span></div>
+    ${past.map(t=>dailyItem(t,cm)).join('')}
+    ${upcoming.length&&past.length?`<div class="current-time-bar"><span class="dot"></span>Now — ${timeStr}</div>`:''}
+    ${upcoming.map(t=>dailyItem(t,cm)).join('')}
+  </div>
+  ${dueW.length?`<div class="section"><div class="section-header"><h3>📆 Also Due Today</h3><span class="count">${dueW.length}</span></div>${dueW.map(weeklyItem).join('')}</div>`:''}`;
+}
+
+function viewDaily(cm) {
+  const daily = getDailyTasks();
+  return `<div class="main-header"><h2>📋 Daily Routine</h2><div class="subtitle">Every single day — tap any task to edit</div></div>
+  <div class="section">
+    ${daily.map(t=>dailyItem(t,cm)).join('')}
+    <div class="add-task-btn" onclick="openTaskEditor('new')">+ Add Daily Task</div>
+  </div>`;
+}
+
+function viewWeekly() {
+  const weekly = getWeeklyTasks();
+  return `<div class="main-header"><h2>📆 Weekly / Regular</h2><div class="subtitle">Grooming, health & supplies — tap any task to edit</div></div>
+  <div class="section">
+    ${weekly.map(weeklyItem).join('')}
+    <div class="add-task-btn" onclick="state.editingTask='new';const m=document.getElementById('taskModal');setTimeout(()=>{document.getElementById('ed-type').value='weekly';document.getElementById('ed-type').dispatchEvent(new Event('change'));},100);openTaskEditor('new');">+ Add Weekly Task</div>
+  </div>`;
+}
+
+function viewTimeline(cm) {
+  const daily = getDailyTasks();
+  const timeStr=getNow().toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'});
+  let html=`<div class="main-header"><h2>⏱️ Timeline</h2><div class="subtitle">Whiteclaw's day at a glance</div></div><div class="timeline">`;
+  let ins=false;
+  daily.forEach(t=>{
+    if(!ins&&(t.timeMinutes||0)>cm){ html+=`<div class="current-time-bar" style="margin-left:-24px"><span class="dot"></span>Now — ${timeStr}</div>`; ins=true; }
+    html+=dailyItem(t,cm);
+  });
+  if(!ins) html+=`<div class="current-time-bar" style="margin-left:-24px"><span class="dot"></span>Now — ${timeStr}</div>`;
+  return html+'</div>';
+}
+
+function viewSettings() {
+  const notifOn = state.notificationsEnabled && 'Notification' in window && Notification.permission==='granted';
+  const notifSupported = 'Notification' in window;
+  const home = getHomeLocation();
+  const isiOS = isIOS();
+  const isPwa = isPWA();
+
+  let notifStatusHTML = '';
+  if (isiOS && !isPwa) {
+    notifStatusHTML = `<div class="notif-status-card">
+      <div style="font-size:13px;font-weight:600;margin-bottom:6px"><span class="notif-dot inactive"></span>Not Available</div>
+      <div style="font-size:12px;color:var(--text-dim)">iOS requires this app to be <strong>added to your Home Screen</strong> before notifications can work. In Safari, tap the Share button → Add to Home Screen.</div>
+    </div>`;
+  } else if (isiOS && isPwa && !notifOn) {
+    notifStatusHTML = `<div class="notif-status-card">
+      <div style="font-size:13px;font-weight:600;margin-bottom:6px"><span class="notif-dot limited"></span>Ready to Enable</div>
+      <div style="font-size:12px;color:var(--text-dim)">You're running as a Home Screen app — tap the toggle to enable notifications. Note: iOS delivers notifications only while the app is open or recently backgrounded.</div>
+    </div>`;
+  } else if (notifOn) {
+    notifStatusHTML = `<div class="notif-status-card">
+      <div style="font-size:13px;font-weight:600;margin-bottom:6px"><span class="notif-dot active"></span>Active</div>
+      <div style="font-size:12px;color:var(--text-dim)">You'll get alerts 30 min before tasks, at task time, and persistent reminders every 30 min for overdue tasks until completed.${isiOS ? ' On iOS, notifications work best when the app is open or recently backgrounded.' : ''}</div>
+    </div>`;
+  }
+
+  return `<div class="main-header"><h2>⚙️ Settings</h2><div class="subtitle">Home, notifications & app preferences</div></div>
+
+  <div class="settings-section"><h3>🏠 Home Address</h3>
+    <div class="address-current">
+      <div class="label" style="font-size:14px;font-weight:600">${home.address}</div>
+      <div style="font-size:11px;color:var(--text-muted);margin-top:4px">${home.lat.toFixed(5)}°N, ${Math.abs(home.lon).toFixed(5)}°W</div>
+    </div>
+    <div style="padding:0 0 6px">
+      <input id="address-input" class="address-input" type="text" placeholder="Enter new address (e.g. 123 Main St, City, FL)"
+        onkeydown="if(event.key==='Enter'){const v=this.value.trim();if(v)updateHomeAddress(v);}">
+      <button class="btn-primary" onclick="const v=document.getElementById('address-input').value.trim();if(v)updateHomeAddress(v);else showToast('Enter an address first')">Update Home Address</button>
+    </div>
+  </div>
+
+  <div class="settings-section"><h3>🔔 Notifications</h3>
+    ${notifStatusHTML}
+    <div class="setting-row">
+      <div><div class="label">Task reminders</div><div class="desc">30 min before, at time, then every 30 min if overdue</div></div>
+      ${notifSupported?`<div class="toggle ${notifOn?'on':''}" onclick="requestNotifPermission()"></div>`:'<span style="font-size:12px;color:var(--text-muted)">Not supported</span>'}
+    </div>
+    <div class="setting-row">
+      <div><div class="label">Background push (v7)</div><div class="desc">Server-sent notifications that work even when the app is fully closed. Powered by Cloudflare Workers.</div></div>
+      ${notifOn && 'PushManager' in window ? `<button style="background:${localStorage.getItem('wc_push_active')==='true'?'var(--green)':'var(--accent)'};color:white;border:none;padding:6px 14px;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer" onclick="${localStorage.getItem('wc_push_active')==='true' ? "unsubscribeFromPush().then(()=>{showToast('Push disabled');render()})" : "subscribeToPush().then(s=>{if(s)showToast('Push enabled!');render()})"}">${localStorage.getItem('wc_push_active')==='true'?'Enabled — Tap to Disable':'Enable Push'}</button>` : '<span style="font-size:12px;color:var(--text-muted)">Enable notifications first</span>'}
+    </div>
+    <div class="setting-row">
+      <div><div class="label">How it works</div><div class="desc">Local notifications fire via the Service Worker when the app is open. Background push sends notifications from the server even when the app is closed. Persistent overdue reminders repeat every 30 minutes. Completing a task stops all its reminders.</div></div>
+    </div>
+  </div>
+
+  <div class="settings-section"><h3>🗺️ Route Engine</h3>
+    <div class="setting-row" style="flex-direction:column;align-items:stretch">
+      <div class="label">How routes are generated</div>
+      <div class="desc" style="margin-top:4px">Routes use <strong>OSRM foot routing</strong> powered by OpenStreetMap. 4 loop patterns (circle, lollipop, figure-8, zigzag), scored 0-100 on loop quality, residential %, green spaces & variety.</div>
+      <div style="margin-top:8px">
+        <div class="walkability-badge">✅ Sidewalks prioritized</div>
+        <div class="walkability-badge">✅ Pedestrian paths included</div>
+        <div class="walkability-badge">✅ Highways avoided</div>
+        <div class="walkability-badge">✅ 7-day anti-repetition</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="settings-section"><h3>📱 Install as App</h3>
+    <div class="setting-row">
+      <div><div class="label">Add to Home Screen</div><div class="desc">On iOS: tap Share → Add to Home Screen<br>On Android: tap Menu → Install app<br><strong>Required for notifications on iOS</strong></div></div>
+      <span style="font-size:18px">📲</span>
+    </div>
+  </div>
+
+  <div class="settings-section"><h3>🗑️ Data Management</h3>
+    <div class="setting-row">
+      <div><div class="label">Reset tasks to defaults</div><div class="desc">Removes all custom tasks and restores original task list</div></div>
+      <button style="background:var(--red);color:white;border:none;padding:6px 14px;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer" onclick="if(confirm('Reset all tasks to defaults? Custom tasks will be lost.')){localStorage.removeItem('wc_tasks_v2');showToast('Tasks reset to defaults');render();}">Reset</button>
+    </div>
+  </div>
+
+  <div class="settings-section"><h3>🐕 About</h3>
+    <div class="setting-row"><div><div class="label">Whiteclaw Care Tracker v8</div><div class="desc">Built with love. Routes via OSM/OSRM. Interactive notification actions, custom recurrence engine, server-sent push via Cloudflare Workers.</div></div></div>
+  </div>`;
+}
+
+function dailyItem(t, cm) {
+  const done=isDailyDone(t.id), past=(t.timeMinutes||0)<=cm;
+  const daily = getDailyTasks();
+  const isNext=!done&&daily.find(x=>!isDailyDone(x.id)&&(x.timeMinutes||0)>cm)?.id===t.id;
+  const timeDisplay = formatTime24to12(t.time) || '';
+  return `<div class="task-item ${done?'completed':''} ${!done&&past?'overdue':''}" onclick="event.stopPropagation();toggleDaily('${t.id}')">
+    <div class="checkbox p${t.priority} ${done?'checked':''}"></div>
+    <div style="font-size:16px">${t.icon}</div>
+    <div class="task-content"><div class="task-name">${t.name}</div><div class="task-meta">
+      ${timeDisplay?`<span class="task-tag tag-time">🕐 ${timeDisplay}</span>`:''}
+      ${t.priority<=2?`<span class="task-tag tag-p${t.priority}">P${t.priority}</span>`:''}
+      ${!done&&past?'<span class="task-tag tag-overdue">⚠️ Past due</span>':''}
+      ${isNext?'<span class="task-tag" style="background:rgba(39,174,96,0.15);color:var(--green-light)">▶ Up next</span>':''}
+    </div>${t.description?`<div class="task-description">${t.description}</div>`:''}</div>
+    <div class="task-right" style="display:flex;flex-direction:column;align-items:flex-end;gap:4px">
+      <span class="next-due ${!done&&past?'overdue':''}">${timeDisplay}</span>
+      <span style="font-size:16px;cursor:pointer;opacity:0.5" onclick="event.stopPropagation();openTaskEditor('${t.id}')">✏️</span>
+    </div>
+  </div>`;
+}
+
+function weeklyItem(t) {
+  const done=isWeeklyDone(t.id), od=isOverdue(t.nextDue)&&!done, dt=isDueToday(t.nextDue);
+  return `<div class="task-item ${done?'completed':''} ${od?'overdue':''}" onclick="event.stopPropagation();toggleWeekly('${t.id}')">
+    <div class="checkbox p${t.priority} ${done?'checked':''}"></div>
+    <div style="font-size:16px">${t.icon}</div>
+    <div class="task-content"><div class="task-name">${t.name}</div><div class="task-meta">
+      <span class="task-tag tag-recurring">🔄 ${formatRecurrence(t)}</span>
+      ${t.priority<=2?`<span class="task-tag tag-p${t.priority}">P${t.priority}</span>`:''}
+      ${t.cost?`<span class="task-tag tag-cost">💰 ${t.cost}</span>`:''}
+      ${od?'<span class="task-tag tag-overdue">⚠️ Overdue</span>':''}
+      ${t.deadline?`<span class="task-tag tag-time">🎯 Deadline: ${formatDate(t.deadline)}</span>`:''}
+    </div>${t.description?`<div class="task-description">${t.description}</div>`:''}</div>
+    <div class="task-right" style="display:flex;flex-direction:column;align-items:flex-end;gap:4px">
+      <span class="next-due ${dt?'today':''} ${od?'overdue':''}">${formatDate(t.nextDue)}</span>
+      <span style="font-size:16px;cursor:pointer;opacity:0.5" onclick="event.stopPropagation();openTaskEditor('${t.id}')">✏️</span>
+    </div>
+  </div>`;
+}
+
+// ===== INIT =====
+render();
+setInterval(render, 60000);
+loadGreenSpaces();
+scheduleNotificationCheck();
+</script>
+</body>
+</html>
